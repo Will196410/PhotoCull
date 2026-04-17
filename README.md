@@ -11,8 +11,8 @@ You can install all the required dependencies using `pip`. It is recommended to 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/Will196410/PhotoCull.git
+cd PhotoCull
 
 # (Optional) Create and activate a virtual environment
 python -m venv venv
