@@ -51,7 +51,7 @@ def main():
         outfile = "stock_candidates.csv"
     elif args.mode == 'animal':
         prompts = ["a majestic wildlife portrait of an animal, sharp eyes, national geographic style", 
-                   "a blurry, distant animal, cluttered cage bars, any text, or domestic mess"]
+                   "a blurry, distant animal, cluttered cage bars, text, writing, or domestic mess"]
         outfile = "animal_candidates.csv"
     elif args.mode == 'landscape':
         prompts = ["a breathtaking landscape photograph, epic scale, golden hour, fine art print", 
