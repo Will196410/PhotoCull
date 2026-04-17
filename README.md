@@ -36,6 +36,10 @@ The scripts rely on the following powerful libraries:
 | **Pandas** | Used to organize the scoring data and export results to CSV. |
 | **Tqdm** | Provides the visual progress bar in the terminal during the scan. |
 
+Install with command:
+`pip install -r requirements.txt`
+
+
 ## Usage
 
 To run the AI judge for fine art landscape selection:
@@ -44,23 +48,3 @@ To run the AI judge for fine art landscape selection:
 python culler.py /path/to/your/photos --mode landscape
 ```
 
----
-
-### Pro-Tip: The `requirements.txt` file
-To make your repo even more professional, I recommend creating a file named `requirements.txt` in your root folder with this content:
-
-```text
-torch
-torchvision
-torchaudio
-transformers
-rawpy
-pillow
-pandas
-tqdm
-```
-
-Then, you can update your README installation instructions to just one simple command:
-`pip install -r requirements.txt`
-
-How many photos are you planning to run through this at once? If it's thousands, we might want to look at adding a "batching" tweak to the code to prevent memory spikes!
