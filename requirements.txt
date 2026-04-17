@@ -6,3 +6,4 @@ rawpy
 pillow
 pandas
 tqdm
+imagehash
