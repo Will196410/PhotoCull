@@ -23,6 +23,9 @@ pip install torch torchvision torchaudio
 pip install transformers pillow rawpy pandas tqdm
 ```
 
+Install with command:
+`pip install -r requirements.txt`
+
 ## Library Overview
 
 The scripts rely on the following powerful libraries:
@@ -35,10 +38,6 @@ The scripts rely on the following powerful libraries:
 | **Pillow** (`PIL`) | The standard Python imaging library for opening and resizing photos. |
 | **Pandas** | Used to organize the scoring data and export results to CSV. |
 | **Tqdm** | Provides the visual progress bar in the terminal during the scan. |
-
-Install with command:
-`pip install -r requirements.txt`
-
 
 ## Usage
 
