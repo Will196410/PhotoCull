@@ -23,7 +23,7 @@ pip install torch torchvision torchaudio
 pip install transformers pillow rawpy pandas tqdm
 ```
 
-Install with command:
+Install libraries with command:
 `pip install -r requirements.txt`
 
 ## Library Overview
