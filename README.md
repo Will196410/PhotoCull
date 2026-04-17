@@ -47,3 +47,13 @@ To run the AI judge for fine art landscape selection:
 python culler.py /path/to/your/photos --mode landscape
 ```
 
+This creates a file called landscape_candidates.csv.
+
+To create a gallery: 
+python3 gallery_pro.py landscape_candidates.csv --threshold 10 --limit 500
+This copies the top 500 matches to a thumbnail directory. Threshold determines how alike images have to be excluded. 1 means exact match. 10 is aggressive. It will exclude similar images. 
+
+The script, gallery.py, is a helper for this script. 
+
+
+
