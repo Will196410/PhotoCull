@@ -1,0 +1,8 @@
+torch
+torchvision
+torchaudio
+transformers
+rawpy
+pillow
+pandas
+tqdm
