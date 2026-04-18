@@ -37,7 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description="AI Photo Culler for Fine Art Prints")
     parser.add_argument("path", help="Path to your SSD/Folder")
     # Added 'animal' and 'landscape' to the choices
-    parser.add_argument("--mode", choices=['art', 'stock', 'animal', 'landscape'], required=True, help="Selection criteria")
+    parser.add_argument("--mode", choices=['art', 'stock', 'animal', 'group', 'landscape'], required=True, help="Selection criteria")
     args = parser.parse_args()
 
     # Define the 'Positive' and 'Negative' prompts based on mode
