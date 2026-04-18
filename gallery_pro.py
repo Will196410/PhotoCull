@@ -19,7 +19,7 @@ def get_hash_and_thumb(img_info):
         resolved_path = path.resolve()
         with Image.open(resolved_path) as img:
             h = imagehash.phash(img)
-            thumb_path = (THUMB_DIR / f"{h}.jpg").resolve()
+            thumb_path = THUMB_DIR / f"{h}.jpg"
             if not thumb_path.exists():
                 thumb_img = img.copy()
                 thumb_img.thumbnail((400, 400))
@@ -29,7 +29,7 @@ def get_hash_and_thumb(img_info):
                 "path": str(resolved_path),
                 "score": score,
                 "file": file_name,
-                "thumb": str(thumb_path)
+                "thumb": thumb_path.as_posix()
             }
     except Exception:
         return None
@@ -172,7 +172,7 @@ def main():
 
     cards = ""
     for item in unique_images:
-        thumb_uri = Path(item['thumb']).resolve().as_uri()
+        thumb_src = item['thumb']
         safe_file = html.escape(str(item['file']))
         safe_path = html.escape(str(item['path']))
         js_path = json.dumps(str(item['path']))
@@ -180,7 +180,7 @@ def main():
         cards += f"""
         <div class="card">
             <button class="thumb-btn" onclick='copyPath({js_path})' title="Copy full path to clipboard">
-                <img src="{thumb_uri}" loading="lazy" alt="{safe_file}">
+                <img src="{thumb_src}" loading="lazy" alt="{safe_file}">
             </button>
             <div class="info">
                 <div class="score">Score: {item['score']}</div>
