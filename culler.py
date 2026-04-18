@@ -53,6 +53,10 @@ def main():
         prompts = ["a majestic wildlife portrait of an animal, sharp eyes, national geographic style", 
                    "a blurry, distant animal, cluttered cage bars, text, writing, or domestic mess"]
         outfile = "animal_candidates.csv"
+    elif args.mode == 'group':
+        prompts = ["a well-composed group photograph featuring multiple people as the primary subject", 
+                   "a portrait of a single person or a photograph with no people"]
+        outfile = "group_candidates.csv"
     elif args.mode == 'landscape':
         prompts = ["a breathtaking landscape photograph, epic scale, golden hour, fine art print", 
                    "a boring gray sky, flat lighting, window reflection, or cluttered power lines"]
