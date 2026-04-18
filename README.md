@@ -74,4 +74,15 @@ This copies the top 500 matches to a thumbnail directory. Threshold determines h
 The script, gallery.py, is a helper for this script. 
 
 
+## Identify Themes
+
+Libraries Required:
+```bash
+pip install torch transformers pillow rawpy pandas tqdm scikit-learn
+```
+
+Simple version:
+```bash
+python photo_themes.py "/Volumes/All Photos/Photos" --year 2008
+```
 
