@@ -1,290 +1,282 @@
-import argparse
-import io
-import sys
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, List, Optional
-
-import pandas as pd
-import rawpy
 import torch
+import rawpy
+import io
+import argparse
+from pathlib import Path
 from PIL import Image, ImageFile
+from transformers import CLIPProcessor, CLIPModel
 from tqdm import tqdm
-from transformers import CLIPModel, CLIPProcessor
+import pandas as pd
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-MODEL_NAME = "openai/clip-vit-base-patch32"
-RAW_EXTENSIONS = {".dng", ".arw", ".cr2", ".nef", ".orf", ".rw2", ".raf"}
-STD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp", ".heic"}
-SUPPORTED_EXTENSIONS = RAW_EXTENSIONS | STD_EXTENSIONS
+# 1. Setup acceleration
+if torch.backends.mps.is_available():
+    device = "mps"
+elif torch.cuda.is_available():
+    device = "cuda"
+else:
+    device = "cpu"
+
+# 2. Load model
+print(f"Initializing AI Judge on {device}...")
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+model.eval()
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+RAW_EXTENSIONS = {'.dng', '.arw', '.cr2', '.nef', '.orf', '.rw2', '.raf'}
+STANDARD_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.heic', '.tif', '.tiff', '.webp', '.bmp'}
+SUPPORTED_EXTENSIONS = RAW_EXTENSIONS | STANDARD_EXTENSIONS
 
 
-@dataclass(frozen=True)
-class ModeConfig:
-    positive_prompt: str
-    negative_prompt: str
-    outfile: str
+def get_image_for_ai(path):
+    """Load RAW or standard image, returning RGB PIL image or None."""
+    ext = path.suffix.lower()
+    try:
+        if ext in RAW_EXTENSIONS:
+            with rawpy.imread(str(path)) as raw:
+                try:
+                    thumb = raw.extract_thumb()
+                    if thumb.format == rawpy.ThumbFormat.JPEG:
+                        return Image.open(io.BytesIO(thumb.data)).convert("RGB")
+                except Exception:
+                    pass
+
+                rgb = raw.postprocess(
+                    use_camera_wb=True,
+                    half_size=True,
+                    auto_bright=False,
+                    output_bps=8
+                )
+                return Image.fromarray(rgb).convert("RGB")
+
+        return Image.open(path).convert("RGB")
+    except Exception:
+        return None
 
 
-MODE_CONFIGS = {
-    "art": ModeConfig(
-        positive_prompt="a masterpiece fine art photograph with moody lighting and strong composition",
-        negative_prompt="a blurry low quality accidental snapshot",
-        outfile="art_candidates.csv",
-    ),
-    "stock": ModeConfig(
-        positive_prompt="a clean commercial stock photo with copy space, sharp focus, and professional composition",
-        negative_prompt="a grainy snapshot with distracting background and poor framing",
-        outfile="stock_candidates.csv",
-    ),
-    "animal": ModeConfig(
-        positive_prompt="a striking wildlife photograph of an animal with sharp eyes and strong subject isolation",
-        negative_prompt="a blurry or distant animal photo with clutter, cage bars, text, or domestic mess",
-        outfile="animal_candidates.csv",
-    ),
-    "group": ModeConfig(
-        positive_prompt="a well-composed group photograph featuring multiple people as the primary subject",
-        negative_prompt="a single-person portrait or a photograph with no people",
-        outfile="group_candidates.csv",
-    ),
-    "landscape": ModeConfig(
-        positive_prompt="a breathtaking landscape photograph with epic scale, fine light, and strong print quality",
-        negative_prompt="a dull landscape with flat light, reflections, clutter, or distracting power lines",
-        outfile="landscape_candidates.csv",
-    ),
-}
-
-
-def pick_device() -> str:
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
-DEVICE = pick_device()
-
-
-def load_model_and_processor():
-    print(f"Initializing CLIP on {DEVICE}...")
-    model = CLIPModel.from_pretrained(MODEL_NAME).to(DEVICE)
-    model.eval()
-    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
-    return model, processor
-
-
-def is_hidden_or_ignored(path: Path) -> bool:
-    parts = path.parts
-    if any(part.startswith(".") for part in parts):
+def is_ignored(path):
+    s = str(path).lower()
+    if path.name.startswith('.'):
         return True
-    lowered = str(path).lower()
-    ignored_fragments = [
-        "/metadata",
-        "\\metadata",
-        "/thumbnails",
-        "\\thumbnails",
-        "/previews",
-        "\\previews",
-        "/sidecar",
-        "\\sidecar",
-    ]
-    return any(fragment in lowered for fragment in ignored_fragments)
+    ignored_fragments = ['metadata', 'preview', 'thumbnail', 'sidecar']
+    return any(fragment in s for fragment in ignored_fragments)
 
 
-def iter_image_paths(root: Path) -> Iterable[Path]:
-    for p in root.rglob("*"):
+def iter_images(root):
+    for p in Path(root).rglob('*'):
         if not p.is_file():
             continue
         if p.suffix.lower() not in SUPPORTED_EXTENSIONS:
             continue
-        if is_hidden_or_ignored(p):
+        if is_ignored(p):
             continue
         yield p
 
 
-def safe_open_standard_image(path: Path) -> Optional[Image.Image]:
-    try:
-        with Image.open(path) as img:
-            return img.convert("RGB")
-    except Exception:
-        return None
+def chunked(seq, size):
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
 
 
-def safe_open_raw_image(path: Path) -> Optional[Image.Image]:
-    try:
-        with rawpy.imread(str(path)) as raw:
-            try:
-                thumb = raw.extract_thumb()
-                if thumb.format == rawpy.ThumbFormat.JPEG:
-                    with Image.open(io.BytesIO(thumb.data)) as img:
-                        return img.convert("RGB")
-                return Image.fromarray(thumb.data).convert("RGB")
-            except Exception:
-                pass
-
-            rgb = raw.postprocess(
-                use_camera_wb=True,
-                half_size=True,
-                auto_bright=False,
-                output_bps=8,
-            )
-            return Image.fromarray(rgb).convert("RGB")
-    except Exception:
-        return None
-
-
-def get_image_for_ai(path: Path) -> Optional[Image.Image]:
-    ext = path.suffix.lower()
-    if ext in RAW_EXTENSIONS:
-        return safe_open_raw_image(path)
-    return safe_open_standard_image(path)
-
-
-def chunked(items: List[Path], size: int) -> Iterable[List[Path]]:
-    for i in range(0, len(items), size):
-        yield items[i:i + size]
-
-
-def build_prompt_embeddings(model, processor, prompts: List[str]) -> torch.Tensor:
-    text_inputs = processor(text=prompts, return_tensors="pt", padding=True).to(DEVICE)
+def build_text_features(prompts):
+    inputs = processor(text=prompts, return_tensors="pt", padding=True).to(device)
     with torch.inference_mode():
-        text_features = model.get_text_features(**text_inputs)
+        text_features = model.get_text_features(**inputs)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
     return text_features
 
 
-def score_batch(
-    model,
-    processor,
-    images: List[Image.Image],
-    text_features: torch.Tensor,
-) -> torch.Tensor:
-    image_inputs = processor(images=images, return_tensors="pt").to(DEVICE)
+def score_images(images, text_features):
+    inputs = processor(images=images, return_tensors="pt").to(device)
     with torch.inference_mode():
-        image_features = model.get_image_features(**image_inputs)
+        image_features = model.get_image_features(**inputs)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         logits = image_features @ text_features.T
-        probs = logits.softmax(dim=1)
-    return probs
+    return logits
+
+
+def soft_pair_score(logits_row, pos_idx, neg_idx):
+    pair = torch.tensor([logits_row[pos_idx].item(), logits_row[neg_idx].item()])
+    probs = torch.softmax(pair, dim=0)
+    return probs[0].item()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Photo Culler for fine art prints and stock photography")
-    parser.add_argument("path", help="Path to folder or drive root")
-    parser.add_argument(
-        "--mode",
-        choices=sorted(MODE_CONFIGS.keys()),
-        required=True,
-        help="Selection criteria",
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=16,
-        help="Number of images to score per batch (default: 16)",
-    )
-    parser.add_argument(
-        "--top",
-        type=int,
-        default=10,
-        help="How many top results to print at the end (default: 10)",
-    )
-    parser.add_argument(
-        "--min-score",
-        type=float,
-        default=0.0,
-        help="Discard results below this positive-prompt probability",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default=None,
-        help="Optional custom CSV filename",
-    )
+    parser = argparse.ArgumentParser(description="AI Photo Culler for Fine Art Prints / Stock / Wildlife / Landscape")
+    parser.add_argument("path", help="Path to SSD/folder")
+    parser.add_argument("--mode", choices=['art', 'stock', 'animal', 'group', 'landscape'], required=True, help="Selection criteria")
+    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for inference")
+    parser.add_argument("--top", type=int, default=10, help="How many top results to print")
     args = parser.parse_args()
 
-    root = Path(args.path).expanduser().resolve()
-    if not root.exists():
-        print(f"Path does not exist: {root}", file=sys.stderr)
-        sys.exit(1)
+    if args.mode == 'stock':
+        prompts = [
+            # Positive prompts
+            "a professional commercial stock photo suitable for advertising",
+            "a clean modern stock photograph with sharp main subject and usable copy space",
+            "a commercially useful image with simple composition and broad business or editorial appeal",
+            "a polished high quality photograph with clean background and natural color",
+            "a licensable stock image with no obvious branding or legal problems",
 
-    cfg = MODE_CONFIGS[args.mode]
-    outfile = args.output or cfg.outfile
-    prompts = [cfg.positive_prompt, cfg.negative_prompt]
+            # Negative prompts
+            "a blurry low quality snapshot with poor focus and technical defects",
+            "a cluttered distracting photo with messy background and weak composition",
+            "an image with logos, trademarks, brand names, labels, or copyrighted artwork",
+            "a private or restricted property image likely to need a property release",
+            "a photo with harsh noise, oversharpening, artifacts, or bad exposure"
+        ]
+        outfile = "stock_candidates.csv"
 
-    model, processor = load_model_and_processor()
-    text_features = build_prompt_embeddings(model, processor, prompts)
+        pairs = {
+            "commercial_appeal": (0, 5),
+            "copyspace_cleanliness": (1, 6),
+            "broad_usability": (2, 6),
+            "technical_quality": (3, 9),
+            "release_friendliness": (4, 7)
+        }
 
-    image_paths = list(iter_image_paths(root))
+    elif args.mode == 'art':
+        prompts = [
+            "a strong fine art photograph with mood, atmosphere, and compelling composition",
+            "a gallery-worthy photographic print with emotional impact and elegant light",
+            "a photograph with distinctive artistic vision and print-worthy tonal quality",
+
+            "a dull accidental snapshot with weak composition",
+            "a technically poor blurry image with no artistic impact",
+            "a cluttered literal record shot with no atmosphere"
+        ]
+        outfile = "art_candidates.csv"
+
+        pairs = {
+            "artistic_strength": (0, 3),
+            "print_appeal": (1, 4),
+            "distinctiveness": (2, 5)
+        }
+
+    elif args.mode == 'animal':
+        prompts = [
+            "a strong wildlife photograph with sharp eyes and clear animal subject",
+            "a close, detailed, professional animal portrait",
+            "a nature photograph with excellent animal subject isolation",
+
+            "a blurry distant animal photograph",
+            "an animal obscured by clutter, fences, cage bars, or background distractions",
+            "a domestic pet snapshot with weak composition"
+        ]
+        outfile = "animal_candidates.csv"
+
+        pairs = {
+            "subject_strength": (0, 3),
+            "detail_closeness": (1, 3),
+            "clean_isolation": (2, 4)
+        }
+
+    elif args.mode == 'group':
+        prompts = [
+            "a well-composed group photograph with multiple people clearly as the main subject",
+            "a professional group portrait with good balance and clear subjects",
+
+            "a single person portrait",
+            "a photo with no people",
+            "a chaotic crowd scene with no clear group subject"
+        ]
+        outfile = "group_candidates.csv"
+
+        pairs = {
+            "group_presence": (0, 2),
+            "group_clarity": (1, 4)
+        }
+
+    elif args.mode == 'landscape':
+        prompts = [
+            "a striking landscape photograph with dramatic light and strong composition",
+            "a print-worthy scenic landscape with depth, atmosphere, and visual impact",
+            "a beautiful natural landscape image with clean horizon and no distractions",
+
+            "a dull flat landscape with weak light",
+            "a cluttered landscape with wires, poles, reflections, or distractions",
+            "a casual travel snapshot with no strong scenic impact"
+        ]
+        outfile = "landscape_candidates.csv"
+
+        pairs = {
+            "visual_impact": (0, 3),
+            "print_quality": (1, 5),
+            "clean_scenery": (2, 4)
+        }
+
+    image_paths = list(iter_images(args.path))
+
     if not image_paths:
-        print("No supported images found. Check your path, extensions, and permissions.")
+        print("No images found. Check your path and permissions.")
         return
 
-    print(f"Mode: {args.mode.upper()} | Found {len(image_paths)} images")
-    print(f"Writing results to: {outfile}")
+    print(f"Mode: {args.mode.upper()} | Found {len(image_paths)} images. Starting scan...")
 
+    text_features = build_text_features(prompts)
     results = []
-    failed = []
+    failures = []
 
     for batch_paths in tqdm(list(chunked(image_paths, args.batch_size)), desc="Scoring"):
         batch_images = []
-        batch_valid_paths = []
+        valid_paths = []
 
-        for path in batch_paths:
-            img = get_image_for_ai(path)
+        for img_path in batch_paths:
+            img = get_image_for_ai(img_path)
             if img is None:
-                failed.append(str(path))
+                failures.append(str(img_path))
                 continue
             batch_images.append(img)
-            batch_valid_paths.append(path)
+            valid_paths.append(img_path)
 
         if not batch_images:
             continue
 
         try:
-            probs = score_batch(model, processor, batch_images, text_features)
+            logits = score_images(batch_images, text_features)
         except Exception:
-            failed.extend(str(p) for p in batch_valid_paths)
+            failures.extend(str(p) for p in valid_paths)
             continue
 
-        for path, prob_row in zip(batch_valid_paths, probs):
-            positive_score = prob_row[0].item()
-            negative_score = prob_row[1].item()
+        for img_path, row in zip(valid_paths, logits):
+            row_scores = {}
+            for name, (pos_idx, neg_idx) in pairs.items():
+                row_scores[name] = soft_pair_score(row, pos_idx, neg_idx)
 
-            if positive_score < args.min_score:
-                continue
+            # Weighted final score
+            if args.mode == 'stock':
+                final_score = (
+                    row_scores["commercial_appeal"] * 0.28 +
+                    row_scores["copyspace_cleanliness"] * 0.20 +
+                    row_scores["broad_usability"] * 0.17 +
+                    row_scores["technical_quality"] * 0.23 +
+                    row_scores["release_friendliness"] * 0.12
+                )
+            else:
+                final_score = sum(row_scores.values()) / len(row_scores)
 
-            results.append(
-                {
-                    "file": path.name,
-                    "path": str(path),
-                    "parent": str(path.parent),
-                    "mode": args.mode,
-                    "score": round(positive_score, 6),
-                    "negative_score": round(negative_score, 6),
-                    "extension": path.suffix.lower(),
-                }
-            )
+            results.append({
+                "file": img_path.name,
+                "path": str(img_path),
+                "score": round(final_score, 4),
+                **{k: round(v, 4) for k, v in row_scores.items()}
+            })
 
     if not results:
-        print("No results passed your filter.")
-        if failed:
-            print(f"Failed to read/score: {len(failed)} files")
+        print("No results scored successfully.")
         return
 
     df = pd.DataFrame(results).sort_values(by="score", ascending=False)
     df.to_csv(outfile, index=False)
 
-    print(f"\nDone. Saved {len(df)} scored images to {outfile}")
-    print(f"Top {min(args.top, len(df))} {args.mode} candidates:\n")
-    print(df[["file", "score", "negative_score", "parent"]].head(args.top).to_string(index=False))
+    print(f"\n✅ Done! Top {args.top} {args.mode} candidates:")
+    print(df.head(args.top).to_string(index=False))
 
-    if failed:
-        failfile = Path(outfile).with_suffix(".failed.txt")
-        failfile.write_text("\n".join(failed), encoding="utf-8")
-        print(f"\nFailed to read/score {len(failed)} files. Logged to {failfile}")
+    if failures:
+        failed_file = Path(outfile).with_suffix(".failed.txt")
+        failed_file.write_text("\n".join(failures), encoding="utf-8")
+        print(f"\n⚠️ {len(failures)} files failed to load. Logged to {failed_file}")
 
 
 if __name__ == "__main__":
