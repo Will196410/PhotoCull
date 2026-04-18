@@ -44,10 +44,26 @@ The scripts rely on the following powerful libraries:
 To run the AI judge for fine art landscape selection:
 
 ```bash
-python culler.py /path/to/your/photos --mode landscape
+python cullerV2.py "/Volumes/All Photos/Photos/2007" --mode landscape   
 ```
 
 This creates a file called landscape_candidates.csv.
+
+There is a dedicated culler for stock photogrpahy:
+```bash
+python stock_culler.py "/Volumes/Photos" --batch-size 16 --top 30 --min-score 0.40
+```
+Both scripts offer this parameter:
+--batch-size is how many images the script scores at once in a single model pass.
+So:
+* --batch-size 1 = one image at a time
+* --batch-size 16 = sixteen images at a time
+* --batch-size 32 = thirty-two at a time
+
+Why it matters:
+* larger batch usually runs faster
+* but uses more memory
+* if it is too large, you can get slowdowns or memory errors
 
 To create a gallery: 
 ```bash
