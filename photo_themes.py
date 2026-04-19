@@ -147,17 +147,56 @@ def choose_representative_indices(cluster_rows, embeddings, limit=3):
     return [item[0]["row_index"] for item in ranked[:limit]]
 
 
-def slugify(text):
-    out = []
-    for ch in text.lower():
-        if ch.isalnum():
-            out.append(ch)
-        elif ch in (" ", "-", "_", "/"):
-            out.append("-")
-    s = "".join(out).strip("-")
-    while "--" in s:
-        s = s.replace("--", "-")
-    return s or "theme"
+def clean_prompt_label(label: str) -> str:
+    label = label.strip()
+    replacements = [
+        ("a ", ""),
+        ("an ", ""),
+        (" photograph", ""),
+        (" photo", ""),
+        (" scene", ""),
+        (" image", ""),
+    ]
+    for old, new in replacements:
+        label = label.replace(old, new)
+    return " ".join(label.split())
+
+
+def get_dominant_subfolder(items):
+    counts = Counter()
+    for r in items:
+        rel = Path(r["relative_path"])
+        parts = rel.parts[:-1]  # folder parts only
+        if parts:
+            counts[parts[0]] += 1
+        else:
+            counts["."] += 1
+    return counts.most_common(1)[0][0] if counts else "."
+
+
+def build_display_theme_name(top_labels, dominant_folder, cluster_id):
+    primary = clean_prompt_label(top_labels[0])
+    secondary = clean_prompt_label(top_labels[1])
+
+    # Avoid ugly repetition when the second label adds little.
+    weak_seconds = {
+        "travel snapshot of a place",
+        "village, town, or street",
+        "indoor",
+    }
+
+    parts = [primary]
+
+    if secondary != primary and secondary not in weak_seconds:
+        parts.append(secondary)
+
+    if dominant_folder and dominant_folder != ".":
+        parts.append(dominant_folder)
+
+    # Add cluster id suffix so repeated broad labels are still clearly distinct.
+    parts.append(f"{int(cluster_id):02d}")
+
+    return " • ".join(parts)
 
 
 def main():
@@ -262,7 +301,6 @@ def main():
     for r in rows:
         cluster_to_rows[r["cluster_id"]].append(r)
 
-    # Fold small clusters into Miscellaneous
     small_clusters = {cid for cid, items in cluster_to_rows.items() if len(items) < args.min_cluster_size}
     next_misc_cluster = max(cluster_to_rows.keys(), default=-1) + 1
 
@@ -290,30 +328,34 @@ def main():
         best_indices = sims.argsort()[::-1][:3]
         top_labels = [THEME_PROMPTS[i] for i in best_indices]
 
+        dominant_folder = get_dominant_subfolder(items)
+
         if len(items) < args.min_cluster_size:
             theme_name = "miscellaneous mixed subjects"
+            display_theme_name = f"miscellaneous mixed subjects • {int(cluster_id):02d}"
         else:
-            theme_name = top_labels[0].replace("a ", "").replace("an ", "")
+            theme_name = clean_prompt_label(top_labels[0])
+            display_theme_name = build_display_theme_name(top_labels, dominant_folder, cluster_id)
 
         cluster_label_map[cluster_id] = {
             "theme_name": theme_name,
+            "display_theme_name": display_theme_name,
             "top_labels": top_labels,
+            "dominant_folder": dominant_folder,
         }
 
         reps = choose_representative_indices(items, embeddings, limit=3)
         rep_files = [rows[i]["relative_path"] for i in reps]
 
-        folder_counts = Counter(Path(r["relative_path"]).parts[0] if "/" in r["relative_path"] else "." for r in items)
-        main_subfolder = folder_counts.most_common(1)[0][0] if folder_counts else "."
-
         theme_rows.append({
             "cluster_id": cluster_id,
             "theme_name": theme_name,
+            "display_theme_name": display_theme_name,
             "image_count": len(items),
             "top_label_1": top_labels[0],
             "top_label_2": top_labels[1],
             "top_label_3": top_labels[2],
-            "main_subfolder": main_subfolder,
+            "dominant_folder": dominant_folder,
             "representative_1": rep_files[0] if len(rep_files) > 0 else "",
             "representative_2": rep_files[1] if len(rep_files) > 1 else "",
             "representative_3": rep_files[2] if len(rep_files) > 2 else "",
@@ -322,36 +364,37 @@ def main():
     for r in rows:
         meta = cluster_label_map[r["cluster_id"]]
         r["theme_name"] = meta["theme_name"]
+        r["display_theme_name"] = meta["display_theme_name"]
         r["theme_top_label_1"] = meta["top_labels"][0]
         r["theme_top_label_2"] = meta["top_labels"][1]
         r["theme_top_label_3"] = meta["top_labels"][2]
+        r["dominant_folder"] = meta["dominant_folder"]
 
-    # Save image CSV
     image_df = pd.DataFrame([
         {
             "cluster_id": r["cluster_id"],
             "theme_name": r["theme_name"],
+            "display_theme_name": r["display_theme_name"],
             "file": r["file"],
             "path": r["path"],
             "relative_path": r["relative_path"],
             "folder": r["folder"],
             "thumb": r["thumb"],
+            "dominant_folder": r["dominant_folder"],
             "theme_top_label_1": r["theme_top_label_1"],
             "theme_top_label_2": r["theme_top_label_2"],
             "theme_top_label_3": r["theme_top_label_3"],
         }
         for r in rows
-    ]).sort_values(by=["theme_name", "relative_path"])
+    ]).sort_values(by=["display_theme_name", "relative_path"])
 
     image_csv = out_dir / f"{args.year}_images.csv"
     image_df.to_csv(image_csv, index=False)
 
-    # Save theme CSV
-    theme_df = pd.DataFrame(theme_rows).sort_values(by=["image_count", "theme_name"], ascending=[False, True])
+    theme_df = pd.DataFrame(theme_rows).sort_values(by=["image_count", "display_theme_name"], ascending=[False, True])
     theme_csv = out_dir / f"{args.year}_themes.csv"
     theme_df.to_csv(theme_csv, index=False)
 
-    # HTML gallery
     print("Building HTML gallery...")
     grouped = defaultdict(list)
     for r in rows:
@@ -533,13 +576,14 @@ def main():
     for cid in cluster_order:
         items = grouped[cid]
         meta = cluster_label_map[cid]
-        theme_name = html.escape(meta["theme_name"])
-        top_labels = " • ".join(html.escape(x) for x in meta["top_labels"])
+        theme_name = html.escape(meta["display_theme_name"])
+        top_labels = " • ".join(html.escape(clean_prompt_label(x)) for x in meta["top_labels"])
+        dominant_folder = html.escape(meta["dominant_folder"])
 
         block = f"""
         <div class="theme-block">
             <div class="theme-title">{theme_name}</div>
-            <div class="theme-meta">{len(items)} images</div>
+            <div class="theme-meta">{len(items)} images • dominant folder: {dominant_folder}</div>
             <div class="theme-labels">{top_labels}</div>
             <div class="grid">
         """
@@ -583,7 +627,7 @@ def main():
         print(f"{len(failed)} files failed to load. Logged to {failed_file}")
 
     print()
-    print(f"Done.")
+    print("Done.")
     print(f"Images CSV:  {image_csv}")
     print(f"Themes CSV:  {theme_csv}")
     print(f"Gallery:     {gallery_html}")
