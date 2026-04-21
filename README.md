@@ -86,3 +86,12 @@ Simple version:
 python photo_themes.py "/Volumes/All Photos/Photos" --year 2008
 ```
 
+## Theme with deduplicated Galleries.
+
+**photo_dedupe.py**
+Installatin:
+Inside the virtual environment:
+```bash
+python -m pip install pillow imagehash
+```
+
