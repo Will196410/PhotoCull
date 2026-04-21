@@ -15,8 +15,8 @@ git clone https://github.com/Will196410/PhotoCull.git
 cd PhotoCull
 
 # (Optional) Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
+python -m venv venv # creates the virtual environment, which is a folder. Do this only once.
+source venv/bin/activate  # On Windows use: venv\Scripts\activate. Do this after each reboot.
 
 # Install dependencies
 pip install torch torchvision torchaudio
