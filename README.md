@@ -94,4 +94,22 @@ Inside the virtual environment:
 ```bash
 python -m pip install pillow imagehash
 ```
+To run:
+```bash
+python photo_dedupe.py "/Volumes/All Photos/Photos" --outdir "/Volumes/All Photos/dedupe_output" --verbose
+```
+Produces:
+/Volumes/All Photos/dedupe_output/dedupe_exact.csv
+/Volumes/All Photos/dedupe_output/dedupe_groups.csv
+/Volumes/All Photos/dedupe_output/gallery_excludes.txt
+/Volumes/All Photos/dedupe_output/dedupe_summary.json
+
+How to use it with your gallery builder
+
+The cleanest way is:
+
+1. run photo_dedupe.py
+2. load gallery_excludes.txt in your gallery builder
+3. skip any file whose relative path appears there
+
 
