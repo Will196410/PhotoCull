@@ -2,8 +2,10 @@ import argparse
 import io
 import json
 import html
+
 from collections import Counter, defaultdict
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import rawpy
@@ -95,7 +97,8 @@ def is_ignored(path: Path):
     return any(fragment in s for fragment in ignored_fragments)
 
 
-def load_exclude_set(exclude_file: Path | None):
+from typing import Optional
+def load_exclude_set(exclude_file: Optional[Path]):
     if exclude_file is None:
         return set()
 
