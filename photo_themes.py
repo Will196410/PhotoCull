@@ -44,12 +44,14 @@ THEME_PROMPTS = [
     "an abstract visual pattern photograph",
 ]
 
+
 def pick_device():
     if torch.backends.mps.is_available():
         return "mps"
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
 
 DEVICE = pick_device()
 
@@ -93,7 +95,23 @@ def is_ignored(path: Path):
     return any(fragment in s for fragment in ignored_fragments)
 
 
-def iter_images(root: Path):
+def load_exclude_set(exclude_file: Path | None):
+    if exclude_file is None:
+        return set()
+
+    if not exclude_file.exists():
+        print(f"Warning: exclude file not found: {exclude_file}")
+        return set()
+
+    lines = exclude_file.read_text(encoding="utf-8").splitlines()
+    excluded = {line.strip().replace("\\", "/") for line in lines if line.strip()}
+    print(f"Loaded {len(excluded)} excluded paths from {exclude_file}")
+    return excluded
+
+
+def iter_images(root: Path, excluded_relative_paths=None):
+    excluded_relative_paths = excluded_relative_paths or set()
+
     for p in root.rglob("*"):
         if not p.is_file():
             continue
@@ -101,6 +119,11 @@ def iter_images(root: Path):
             continue
         if is_ignored(p):
             continue
+
+        rel = p.relative_to(root).as_posix()
+        if rel in excluded_relative_paths:
+            continue
+
         yield p
 
 
@@ -139,6 +162,7 @@ def choose_representative_indices(cluster_rows, embeddings, limit=3):
         return [r["row_index"] for r in cluster_rows]
 
     import numpy as np
+
     vecs = np.stack([embeddings[r["row_index"]] for r in cluster_rows], axis=0)
     centroid = vecs.mean(axis=0)
     centroid /= max((centroid @ centroid) ** 0.5, 1e-8)
@@ -166,7 +190,7 @@ def get_dominant_subfolder(items):
     counts = Counter()
     for r in items:
         rel = Path(r["relative_path"])
-        parts = rel.parts[:-1]  # folder parts only
+        parts = rel.parts[:-1]
         if parts:
             counts[parts[0]] += 1
         else:
@@ -178,7 +202,6 @@ def build_display_theme_name(top_labels, dominant_folder, cluster_id):
     primary = clean_prompt_label(top_labels[0])
     secondary = clean_prompt_label(top_labels[1])
 
-    # Avoid ugly repetition when the second label adds little.
     weak_seconds = {
         "travel snapshot of a place",
         "village, town, or street",
@@ -193,7 +216,6 @@ def build_display_theme_name(top_labels, dominant_folder, cluster_id):
     if dominant_folder and dominant_folder != ".":
         parts.append(dominant_folder)
 
-    # Add cluster id suffix so repeated broad labels are still clearly distinct.
     parts.append(f"{int(cluster_id):02d}")
 
     return " • ".join(parts)
@@ -207,6 +229,7 @@ def main():
     parser.add_argument("--distance-threshold", type=float, default=0.22, help="Lower = tighter clusters, higher = broader clusters")
     parser.add_argument("--min-cluster-size", type=int, default=6, help="Clusters smaller than this become Miscellaneous")
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for testing; 0 means no limit")
+    parser.add_argument("--exclude-file", default="", help="Optional text file of relative paths to exclude, one per line")
     args = parser.parse_args()
 
     root = Path(args.root).expanduser().resolve()
@@ -216,13 +239,16 @@ def main():
         print(f"Year folder not found: {year_dir}")
         return
 
+    exclude_file = Path(args.exclude_file).expanduser().resolve() if args.exclude_file else None
+    excluded_relative_paths = load_exclude_set(exclude_file)
+
     out_dir = Path("theme_output") / str(args.year)
     thumbs_dir = out_dir / "thumbs"
     out_dir.mkdir(parents=True, exist_ok=True)
     thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Scanning {year_dir}...")
-    image_paths = list(iter_images(year_dir))
+    image_paths = list(iter_images(year_dir, excluded_relative_paths=excluded_relative_paths))
     if args.max_images > 0:
         image_paths = image_paths[:args.max_images]
 
@@ -259,6 +285,7 @@ def main():
                 "file": img_path.name,
                 "path": str(img_path.resolve()),
                 "relative_path": rel_from_year.as_posix(),
+                "archive_relative_path": img_path.relative_to(root).as_posix(),
                 "folder": str(img_path.parent),
                 "thumb": f"thumbs/{thumb_name}",
             })
@@ -378,6 +405,7 @@ def main():
             "file": r["file"],
             "path": r["path"],
             "relative_path": r["relative_path"],
+            "archive_relative_path": r["archive_relative_path"],
             "folder": r["folder"],
             "thumb": r["thumb"],
             "dominant_folder": r["dominant_folder"],
@@ -402,6 +430,7 @@ def main():
 
     cluster_order = sorted(grouped.keys(), key=lambda cid: len(grouped[cid]), reverse=True)
 
+    excluded_count = len(excluded_relative_paths)
     html_header = f"""
     <html>
     <head>
@@ -522,7 +551,7 @@ def main():
     <body>
     <div class="wrap">
         <h1>Photo Themes for {args.year}</h1>
-        <div class="summary">{len(rows)} images grouped into {len(cluster_order)} theme clusters.</div>
+        <div class="summary">{len(rows)} images grouped into {len(cluster_order)} theme clusters. Excluded before clustering: {excluded_count}.</div>
     """
 
     script = """
