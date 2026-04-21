@@ -111,11 +111,10 @@ def load_exclude_set(exclude_file: Optional[Path]):
     print(f"Loaded {len(excluded)} excluded paths from {exclude_file}")
     return excluded
 
-
-def iter_images(root: Path, excluded_relative_paths=None):
+def iter_images(scan_root: Path, archive_root: Path, excluded_relative_paths=None):
     excluded_relative_paths = excluded_relative_paths or set()
 
-    for p in root.rglob("*"):
+    for p in scan_root.rglob("*"):
         if not p.is_file():
             continue
         if p.suffix.lower() not in SUPPORTED_EXTENSIONS:
@@ -123,13 +122,12 @@ def iter_images(root: Path, excluded_relative_paths=None):
         if is_ignored(p):
             continue
 
-        rel = p.relative_to(root).as_posix()
-        if rel in excluded_relative_paths:
+        archive_rel = p.relative_to(archive_root).as_posix()
+        if archive_rel in excluded_relative_paths:
             continue
 
         yield p
-
-
+        
 def chunked(seq, size):
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
@@ -251,7 +249,8 @@ def main():
     thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Scanning {year_dir}...")
-    image_paths = list(iter_images(year_dir, excluded_relative_paths=excluded_relative_paths))
+
+    image_paths = list(iter_images(year_dir, root, excluded_relative_paths=excluded_relative_paths))
     if args.max_images > 0:
         image_paths = image_paths[:args.max_images]
 
