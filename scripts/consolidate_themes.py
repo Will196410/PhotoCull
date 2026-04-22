@@ -18,6 +18,7 @@ MASTER_CATEGORIES = [
     "Place and Travel",
     "Rural Life and Working Country",
     "Weather, Light, and Atmosphere",
+    "Other / Uncertain",
 ]
 
 DEFAULT_THEME_OUTPUT_DIRNAME = "theme_output"
@@ -37,14 +38,14 @@ EXACT_PRIMARY_MAP = {
     "garden": "Nature Detail",
     "bird or wildlife": "Wildlife",
     "farm animal": "Farm Animals",
-    "pet": "People and Human Presence",
+    "pet": "Other / Uncertain",
     "people or group": "People and Human Presence",
     "portrait of one person": "People and Human Presence",
     "village, town, or street": "Place and Travel",
     "travel snapshot of a place": "Place and Travel",
     "old building or historic architecture": "Place and Travel",
-    "transport or vehicle": "Place and Travel",
-    "indoor": "Place and Travel",
+    "transport or vehicle": "Other / Uncertain",
+    "indoor": "Other / Uncertain",
     "sky, cloud, or weather": "Weather, Light, and Atmosphere",
     "abstract visual pattern": "Nature Detail",
 }
@@ -59,34 +60,51 @@ SECONDARY_HINTS = {
     "Place and Travel": [],
     "Rural Life and Working Country": ["Landscape"],
     "Weather, Light, and Atmosphere": ["Landscape"],
+    "Other / Uncertain": [],
 }
 
 WATERSIDE_KEYWORDS = {
-    "harbour", "harbor", "port", "boat", "boats", "pier", "quay", "jetty", "marina", "river", "waterside", "shore", "shoreline", "fishing",
+    "harbour", "harbor", "port", "boat", "boats", "pier", "quay", "jetty", "marina",
+    "river", "waterside", "shore", "shoreline", "fishing", "dock", "docks"
 }
 WILDLIFE_KEYWORDS = {
-    "wildlife", "bird", "birds", "bear", "bears", "deer", "fox", "foxes", "seal", "seals", "squirrel", "squirrels", "raptor", "raptors", "owl", "owls", "eagle", "eagles", "hawk", "hawks",
+    "wildlife", "bird", "birds", "bear", "bears", "deer", "fox", "foxes", "seal", "seals",
+    "squirrel", "squirrels", "raptor", "raptors", "owl", "owls", "eagle", "eagles",
+    "hawk", "hawks", "heron", "gull", "gulls", "otter", "otters"
 }
 FARM_KEYWORDS = {
-    "farm", "sheep", "cow", "cows", "goat", "goats", "pig", "pigs", "chicken", "chickens", "tractor", "barn", "barns", "grazing", "livestock",
+    "farm", "sheep", "cow", "cows", "goat", "goats", "pig", "pigs", "chicken",
+    "chickens", "tractor", "barn", "barns", "grazing", "livestock", "calf", "calves"
+}
+PET_KEYWORDS = {
+    "pet", "pets", "dog", "dogs", "cat", "cats", "puppy", "puppies", "kitten", "kittens"
 }
 PEOPLE_KEYWORDS = {
-    "people", "person", "portrait", "group", "crowd", "musician", "musicians", "performer", "performers", "judge", "judges", "police", "officer", "officers", "worker", "workers", "vendor", "vendors", "tourist", "tourists", "child", "children", "couple", "man", "woman", "women", "men",
+    "people", "person", "portrait", "group", "crowd", "musician", "musicians",
+    "performer", "performers", "judge", "judges", "police", "officer", "officers",
+    "worker", "workers", "vendor", "vendors", "tourist", "tourists", "child",
+    "children", "couple", "man", "woman", "women", "men", "family", "families"
 }
 RURAL_KEYWORDS = {
-    "rural", "field", "fields", "farmland", "farm", "tractor", "barn", "barns", "hedgerow", "country", "countryside",
+    "rural", "field", "fields", "farmland", "farm", "tractor", "barn", "barns",
+    "hedgerow", "country", "countryside", "pasture"
 }
 ATMOSPHERE_KEYWORDS = {
-    "weather", "mist", "misty", "fog", "foggy", "storm", "stormy", "sunset", "sunrise", "dramatic", "rain", "rainy", "frost", "cloud", "clouds", "sky",
+    "weather", "mist", "misty", "fog", "foggy", "storm", "stormy", "sunset", "sunrise",
+    "dramatic", "rain", "rainy", "frost", "cloud", "clouds", "sky", "moody", "gloom",
+    "golden", "dusk", "dawn"
 }
 NATURE_DETAIL_KEYWORDS = {
-    "flower", "flowers", "plant", "plants", "leaf", "leaves", "foliage", "macro", "texture", "detail", "bark", "fungi", "mushroom", "mushrooms", "garden",
+    "flower", "flowers", "plant", "plants", "leaf", "leaves", "foliage", "macro",
+    "texture", "detail", "bark", "fungi", "mushroom", "mushrooms", "garden"
 }
 LANDSCAPE_KEYWORDS = {
-    "landscape", "coast", "coastal", "beach", "shoreline", "woodland", "forest", "countryside", "scenic",
+    "landscape", "coast", "coastal", "beach", "shoreline", "woodland", "forest",
+    "countryside", "scenic", "hill", "hills", "valley", "cliff", "moor"
 }
 PLACE_TRAVEL_KEYWORDS = {
-    "travel", "village", "town", "street", "architecture", "building", "historic", "city", "market", "indoor", "transport", "vehicle", "place",
+    "travel", "village", "town", "street", "architecture", "building", "historic",
+    "city", "market", "place", "urban", "square", "plaza", "church", "cathedral"
 }
 
 
@@ -146,6 +164,10 @@ def collect_text_fields(row: pd.Series) -> str:
     return " | ".join(str(p) for p in parts if pd.notna(p) and str(p).strip())
 
 
+def has_any_keyword(tokens: set, keywords: set) -> bool:
+    return keyword_score(tokens, keywords) > 0
+
+
 def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
     review_flags = []
     raw_theme = normalize_text(row.get("theme_name", ""))
@@ -159,6 +181,17 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
 
     evidence = Counter()
 
+    pet_hits = keyword_score(tokens, PET_KEYWORDS)
+    people_hits = keyword_score(tokens, PEOPLE_KEYWORDS)
+    wildlife_hits = keyword_score(tokens, WILDLIFE_KEYWORDS)
+    farm_hits = keyword_score(tokens, FARM_KEYWORDS)
+    waterside_hits = keyword_score(tokens, WATERSIDE_KEYWORDS)
+    rural_hits = keyword_score(tokens, RURAL_KEYWORDS)
+    atmosphere_hits = keyword_score(tokens, ATMOSPHERE_KEYWORDS)
+    nature_hits = keyword_score(tokens, NATURE_DETAIL_KEYWORDS)
+    landscape_hits = keyword_score(tokens, LANDSCAPE_KEYWORDS)
+    place_hits = keyword_score(tokens, PLACE_TRAVEL_KEYWORDS)
+
     if raw_theme in EXACT_PRIMARY_MAP:
         evidence[EXACT_PRIMARY_MAP[raw_theme]] += 8
 
@@ -166,72 +199,143 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         if label in EXACT_PRIMARY_MAP:
             evidence[EXACT_PRIMARY_MAP[label]] += 5
 
-    evidence["Waterside and Harbour"] += keyword_score(tokens, WATERSIDE_KEYWORDS) * 2
-    evidence["Wildlife"] += keyword_score(tokens, WILDLIFE_KEYWORDS) * 2
-    evidence["Farm Animals"] += keyword_score(tokens, FARM_KEYWORDS) * 2
-    evidence["People and Human Presence"] += keyword_score(tokens, PEOPLE_KEYWORDS) * 2
-    evidence["Rural Life and Working Country"] += keyword_score(tokens, RURAL_KEYWORDS) * 2
-    evidence["Weather, Light, and Atmosphere"] += keyword_score(tokens, ATMOSPHERE_KEYWORDS) * 2
-    evidence["Nature Detail"] += keyword_score(tokens, NATURE_DETAIL_KEYWORDS) * 2
-    evidence["Landscape"] += keyword_score(tokens, LANDSCAPE_KEYWORDS) * 2
-    evidence["Place and Travel"] += keyword_score(tokens, PLACE_TRAVEL_KEYWORDS) * 2
+    evidence["Waterside and Harbour"] += waterside_hits * 2
+    evidence["Wildlife"] += wildlife_hits * 2
+    evidence["People and Human Presence"] += people_hits * 2
+    evidence["Rural Life and Working Country"] += rural_hits * 2
+    evidence["Weather, Light, and Atmosphere"] += atmosphere_hits * 3
+    evidence["Nature Detail"] += nature_hits * 2
+    evidence["Landscape"] += landscape_hits * 2
+    evidence["Place and Travel"] += place_hits * 2
+    evidence["Other / Uncertain"] += pet_hits * 2
 
-    # Important priority corrections.
-    if evidence["Wildlife"] > 0 and evidence["Farm Animals"] > 0:
+    # Farm Animals should be stricter.
+    if raw_theme == "farm animal":
+        evidence["Farm Animals"] += 6
+    else:
+        if farm_hits >= 2:
+            evidence["Farm Animals"] += farm_hits * 2
+        elif farm_hits == 1:
+            evidence["Farm Animals"] += 1
+
+    # Pets soften animal classification rather than strengthen farm/wild.
+    if pet_hits > 0:
+        evidence["Farm Animals"] = max(evidence["Farm Animals"] - 2, 0)
+        if wildlife_hits == 0:
+            evidence["Wildlife"] = max(evidence["Wildlife"] - 2, 0)
+        if people_hits > 0:
+            evidence["People and Human Presence"] += 1
+
+    # Indoor/transport should not dominate Place and Travel.
+    if raw_theme in {"indoor", "transport or vehicle"}:
+        evidence["Place and Travel"] = max(evidence["Place and Travel"] - 4, 0)
+        evidence["Other / Uncertain"] += 3
+
+    # Abstract visual pattern should not drift to travel.
+    if raw_theme == "abstract visual pattern":
+        evidence["Nature Detail"] += 2
+        evidence["Place and Travel"] = max(evidence["Place and Travel"] - 2, 0)
+
+    # Atmosphere deserves a real chance to become primary.
+    if raw_theme == "sky, cloud, or weather":
+        evidence["Weather, Light, and Atmosphere"] += 4
+    if atmosphere_hits >= 2:
+        evidence["Weather, Light, and Atmosphere"] += 2
+
+    # Travel snapshot is too broad; trim some of its dominance when stronger evidence exists.
+    if raw_theme == "travel snapshot of place":
+        if landscape_hits >= 2:
+            evidence["Landscape"] += 2
+        if waterside_hits >= 2:
+            evidence["Waterside and Harbour"] += 2
+        if people_hits >= 2:
+            evidence["People and Human Presence"] += 2
+        if atmosphere_hits >= 2:
+            evidence["Weather, Light, and Atmosphere"] += 2
+
+    wildlife_conflict_strength = min(evidence["Wildlife"], evidence["Farm Animals"])
+    if wildlife_conflict_strength >= 4:
         review_flags.append("possible_wildlife_farm_conflict")
         if evidence["Wildlife"] >= evidence["Farm Animals"]:
             evidence["Wildlife"] += 2
         else:
             evidence["Farm Animals"] += 1
 
-    if evidence["People and Human Presence"] > 0 and (
-        evidence["Place and Travel"] > 0 or evidence["Landscape"] > 0 or evidence["Waterside and Harbour"] > 0
-    ):
+    people_place_other = max(
+        evidence["Place and Travel"],
+        evidence["Landscape"],
+        evidence["Waterside and Harbour"],
+    )
+    if evidence["People and Human Presence"] >= 4 and people_place_other >= 4:
         review_flags.append("possible_people_place_conflict")
 
-    if evidence["Weather, Light, and Atmosphere"] > 0 and (
-        evidence["Landscape"] > 0 or evidence["Waterside and Harbour"] > 0 or evidence["Rural Life and Working Country"] > 0
-    ):
+    atmosphere_other = max(
+        evidence["Landscape"],
+        evidence["Waterside and Harbour"],
+        evidence["Rural Life and Working Country"],
+    )
+    if evidence["Weather, Light, and Atmosphere"] >= 4 and atmosphere_other >= 4:
         review_flags.append("possible_atmosphere_primary_conflict")
 
-    if not evidence:
-        return "Place and Travel", 0.25, ["low_mapping_confidence"], {"full_text": full_text, "evidence": {}}
+    nonzero_evidence = Counter({k: v for k, v in evidence.items() if v > 0})
+    if not nonzero_evidence:
+        return "Other / Uncertain", 0.2, ["low_mapping_confidence"], {
+            "full_text": full_text,
+            "evidence": {},
+        }
 
-    ranked = evidence.most_common()
+    ranked = nonzero_evidence.most_common()
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
     # Preference rules.
-    if evidence["People and Human Presence"] >= 4 and evidence["People and Human Presence"] >= top_score - 1:
+    if evidence["People and Human Presence"] >= 5 and evidence["People and Human Presence"] >= top_score - 1:
         primary = "People and Human Presence"
         top_score = evidence[primary]
 
-    if evidence["Wildlife"] >= 4 and evidence["Wildlife"] >= evidence["Farm Animals"]:
+    if evidence["Weather, Light, and Atmosphere"] >= 6 and evidence["Weather, Light, and Atmosphere"] >= top_score - 1:
+        primary = "Weather, Light, and Atmosphere"
+        top_score = evidence[primary]
+
+    if evidence["Wildlife"] >= 5 and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
         top_score = evidence[primary]
 
-    if evidence["Farm Animals"] >= 4 and evidence["Farm Animals"] > evidence["Wildlife"]:
+    if raw_theme == "farm animal" and evidence["Farm Animals"] >= 6 and evidence["Farm Animals"] > evidence["Wildlife"]:
+        primary = "Farm Animals"
+        top_score = evidence[primary]
+    elif evidence["Farm Animals"] >= 5 and evidence["Farm Animals"] > evidence["Wildlife"] + 1:
         primary = "Farm Animals"
         top_score = evidence[primary]
 
-    if primary == "Place and Travel" and evidence["Landscape"] >= 4:
+    if primary == "Place and Travel" and evidence["Landscape"] >= 5:
         primary = "Landscape"
         top_score = evidence[primary]
 
-    confidence = 0.55
-    if top_score >= 8 and (top_score - second_score) >= 3:
-        confidence = 0.95
+    # If uncertainty remains high, prefer honesty over bad precision.
+    if top_score <= 3:
+        primary = "Other / Uncertain"
+        top_score = evidence[primary]
+
+    confidence = 0.5
+    if top_score >= 10 and (top_score - second_score) >= 4:
+        confidence = 0.96
+    elif top_score >= 8 and (top_score - second_score) >= 3:
+        confidence = 0.88
     elif top_score >= 6 and (top_score - second_score) >= 2:
-        confidence = 0.85
+        confidence = 0.78
     elif top_score >= 4:
-        confidence = 0.7
+        confidence = 0.64
+
+    if primary == "Other / Uncertain":
+        confidence = min(confidence, 0.45)
 
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
 
     return primary, confidence, sorted(set(review_flags)), {
         "full_text": full_text,
-        "evidence": dict(evidence),
+        "evidence": dict(nonzero_evidence),
     }
 
 
@@ -239,27 +343,27 @@ def derive_secondary_categories(primary: str, row: pd.Series, evidence: dict) ->
     secondaries = set(SECONDARY_HINTS.get(primary, []))
     tokens = tokenize(collect_text_fields(row))
 
-    if primary != "People and Human Presence" and keyword_score(tokens, PEOPLE_KEYWORDS) > 0:
+    if primary != "People and Human Presence" and keyword_score(tokens, PEOPLE_KEYWORDS) >= 2:
         secondaries.add("People and Human Presence")
-    if primary != "Waterside and Harbour" and keyword_score(tokens, WATERSIDE_KEYWORDS) > 0:
+    if primary != "Waterside and Harbour" and keyword_score(tokens, WATERSIDE_KEYWORDS) >= 1:
         secondaries.add("Waterside and Harbour")
-    if primary != "Landscape" and keyword_score(tokens, LANDSCAPE_KEYWORDS) > 0:
+    if primary != "Landscape" and keyword_score(tokens, LANDSCAPE_KEYWORDS) >= 2:
         secondaries.add("Landscape")
-    if primary != "Weather, Light, and Atmosphere" and keyword_score(tokens, ATMOSPHERE_KEYWORDS) > 0:
+    if primary != "Weather, Light, and Atmosphere" and keyword_score(tokens, ATMOSPHERE_KEYWORDS) >= 2:
         secondaries.add("Weather, Light, and Atmosphere")
-    if primary != "Rural Life and Working Country" and keyword_score(tokens, RURAL_KEYWORDS) > 0:
+    if primary != "Rural Life and Working Country" and keyword_score(tokens, RURAL_KEYWORDS) >= 2:
         secondaries.add("Rural Life and Working Country")
-    if primary != "Nature Detail" and keyword_score(tokens, NATURE_DETAIL_KEYWORDS) > 0:
+    if primary != "Nature Detail" and keyword_score(tokens, NATURE_DETAIL_KEYWORDS) >= 2:
         secondaries.add("Nature Detail")
-    if primary != "Place and Travel" and keyword_score(tokens, PLACE_TRAVEL_KEYWORDS) > 0:
+    if primary != "Place and Travel" and keyword_score(tokens, PLACE_TRAVEL_KEYWORDS) >= 2:
         secondaries.add("Place and Travel")
 
-    # Do not create impossible animal secondaries.
     if primary == "Wildlife":
         secondaries.discard("Farm Animals")
     if primary == "Farm Animals":
         secondaries.discard("Wildlife")
 
+    secondaries.discard("Other / Uncertain")
     secondaries.discard(primary)
     return [c for c in MASTER_CATEGORIES if c in secondaries]
 
@@ -430,7 +534,6 @@ def process_year(year_dir: Path, strict: bool = False) -> pd.DataFrame:
         return pd.DataFrame()
 
     images_df = pd.read_csv(images_csv)
-    # themes_df is read mostly to validate presence and allow future extension.
     _themes_df = pd.read_csv(themes_csv)
 
     images_df["year"] = year
