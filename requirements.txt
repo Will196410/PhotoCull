@@ -20,6 +20,7 @@ rawpy==0.26.1
 regex==2026.1.15
 requests==2.32.5
 safetensors==0.7.0
+scikit-learn==1.5.2
 six==1.17.0
 sympy==1.14.0
 tokenizers==0.22.2
