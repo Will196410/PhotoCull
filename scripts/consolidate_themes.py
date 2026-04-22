@@ -292,9 +292,13 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         evidence["Waterside and Harbour"],
         evidence["Rural Life and Working Country"],
     )
-    if evidence["Weather, Light, and Atmosphere"] >= 4 and atmosphere_other >= 4:
+    if (
+        evidence["Weather, Light, and Atmosphere"] >= 6
+        and atmosphere_other >= 6
+        and abs(evidence["Weather, Light, and Atmosphere"] - atmosphere_other) <= 2
+    ):
         review_flags.append("possible_atmosphere_primary_conflict")
-
+        
     nonzero_evidence = Counter({k: v for k, v in evidence.items() if v > 0})
     if not nonzero_evidence:
         return "Other / Uncertain", 0.2, ["low_mapping_confidence"], {
@@ -361,6 +365,12 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         confidence = 0.45
         review_flags.append("reassigned_from_farm_animals_low_confidence")
 
+    if primary == "Nature Detail" and confidence < 0.7:
+        if raw_theme in {"travel snapshot of place", "transport or vehicle", "indoor"}:
+            primary = "Other / Uncertain"
+            confidence = 0.45
+            review_flags.append("reassigned_from_nature_detail_low_confidence")
+    
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
 
