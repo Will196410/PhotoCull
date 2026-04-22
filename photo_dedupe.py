@@ -4,18 +4,25 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
-import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PIL import Image, ExifTags
 import imagehash
+import rawpy
+from PIL import ExifTags, Image, ImageFile
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+Image.MAX_IMAGE_PIXELS = 250_000_000
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".heic", ".heif"}
+RAW_EXTENSIONS = {".dng", ".arw", ".cr2", ".nef", ".orf", ".rw2", ".raf"}
+STANDARD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".heic", ".heif", ".bmp"}
+IMAGE_EXTS = STANDARD_EXTENSIONS | RAW_EXTENSIONS
+
 EXIF_TAGS = {v: k for k, v in ExifTags.TAGS.items()}
 
 
@@ -51,39 +58,76 @@ def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
+def is_raw(path: Path) -> bool:
+    return path.suffix.lower() in RAW_EXTENSIONS
+
+
+def load_image_for_hash(path: Path) -> Optional[Image.Image]:
+    ext = path.suffix.lower()
+    try:
+        if ext in RAW_EXTENSIONS:
+            with rawpy.imread(str(path)) as raw:
+                try:
+                    thumb = raw.extract_thumb()
+                    if thumb.format == rawpy.ThumbFormat.JPEG:
+                        return Image.open(io.BytesIO(thumb.data)).convert("RGB")
+                except Exception:
+                    pass
+
+                rgb = raw.postprocess(
+                    use_camera_wb=True,
+                    half_size=True,
+                    auto_bright=False,
+                    output_bps=8,
+                )
+                return Image.fromarray(rgb).convert("RGB")
+
+        return Image.open(path).convert("RGB")
+    except Exception:
+        return None
+
+
 def get_capture_time(path: Path) -> datetime:
     """
-    Prefer EXIF DateTimeOriginal / DateTime.
-    Fall back to filesystem mtime.
+    Prefer EXIF DateTimeOriginal / DateTime for standard image formats.
+    RAW files often do not expose useful EXIF through Pillow, so fall back to mtime.
     """
-    try:
-        with Image.open(path) as img:
-            exif = img.getexif()
-            if exif:
-                for field in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
-                    tag_id = EXIF_TAGS.get(field)
-                    if tag_id and tag_id in exif:
-                        raw = exif.get(tag_id)
-                        if raw:
-                            # EXIF format: YYYY:MM:DD HH:MM:SS
-                            try:
-                                return datetime.strptime(str(raw), "%Y:%m:%d %H:%M:%S")
-                            except ValueError:
-                                pass
-    except Exception:
-        pass
+    if path.suffix.lower() in STANDARD_EXTENSIONS:
+        try:
+            with Image.open(path) as img:
+                exif = img.getexif()
+                if exif:
+                    for field in ("DateTimeOriginal", "DateTimeDigitized", "DateTime"):
+                        tag_id = EXIF_TAGS.get(field)
+                        if tag_id and tag_id in exif:
+                            raw = exif.get(tag_id)
+                            if raw:
+                                try:
+                                    return datetime.strptime(str(raw), "%Y:%m:%d %H:%M:%S")
+                                except ValueError:
+                                    pass
+        except Exception:
+            pass
 
     return datetime.fromtimestamp(path.stat().st_mtime)
 
 
 def get_dimensions_and_phash(path: Path, hash_size: int = 16) -> Tuple[int, int, Optional[imagehash.ImageHash]]:
+    img = load_image_for_hash(path)
+    if img is None:
+        return 0, 0, None
+
     try:
-        with Image.open(path) as img:
-            width, height = img.size
-            ph = imagehash.phash(img, hash_size=hash_size)
-            return width, height, ph
+        width, height = img.size
+        ph = imagehash.phash(img, hash_size=hash_size)
+        return width, height, ph
     except Exception:
         return 0, 0, None
+    finally:
+        try:
+            img.close()
+        except Exception:
+            pass
 
 
 def load_photo_info(root: Path, verbose: bool = False) -> List[PhotoInfo]:
@@ -101,7 +145,7 @@ def load_photo_info(root: Path, verbose: bool = False) -> List[PhotoInfo]:
         photos.append(
             PhotoInfo(
                 path=path,
-                relpath=str(path.relative_to(root)),
+                relpath=str(path.relative_to(root)).replace("\\", "/"),
                 size=stat.st_size,
                 width=width,
                 height=height,
@@ -114,14 +158,28 @@ def load_photo_info(root: Path, verbose: bool = False) -> List[PhotoInfo]:
     return photos
 
 
-def score_photo(p: PhotoInfo) -> Tuple[int, int, int, str]:
+def normalise_stem(path: Path) -> str:
+    stem = path.stem.lower()
+    stem = re.sub(r"[\s_-]+", "", stem)
+    return stem
+
+
+def format_rank(path: Path) -> int:
+    ext = path.suffix.lower()
+    if ext in {".jpg", ".jpeg"}:
+        return 5
+    if ext in {".tif", ".tiff", ".png", ".webp", ".heic", ".heif", ".bmp"}:
+        return 4
+    if ext in RAW_EXTENSIONS:
+        return 2
+    return 1
+
+
+def score_photo(p: PhotoInfo) -> Tuple[int, int, int, int, str]:
     """
-    Higher is better.
-    Heuristics:
-    - bigger resolution preferred
-    - bigger file preferred
-    - originals preferred over edited/export-ish names
-    - stable tie-break by path
+    Higher is better for gallery use.
+    Prefer rendered formats over RAW when they represent the same image.
+    Then prefer resolution, size, and cleaner filenames.
     """
     megapixels = p.width * p.height
     name = p.path.name.lower()
@@ -134,11 +192,10 @@ def score_photo(p: PhotoInfo) -> Tuple[int, int, int, str]:
     if any(tok in name for tok in bad_tokens):
         penalty -= 1
 
-    # Favor camera originals a bit
     if any(name.startswith(prefix) for prefix in ("dsc", "img_", "p", "pxl_", "dji_")):
         penalty += 1
 
-    return (megapixels, p.size, penalty, p.relpath)
+    return (format_rank(p.path), megapixels, p.size, penalty, p.relpath)
 
 
 def choose_keeper(group: List[PhotoInfo]) -> PhotoInfo:
@@ -152,7 +209,7 @@ def cluster_exact_duplicates(photos: List[PhotoInfo], verbose: bool = False) -> 
 
     exact_groups: List[List[PhotoInfo]] = []
 
-    for size, candidates in by_size.items():
+    for candidates in by_size.values():
         if len(candidates) < 2:
             continue
 
@@ -203,8 +260,8 @@ def cluster_near_duplicates(
     verbose: bool = False,
 ) -> List[List[PhotoInfo]]:
     """
-    Compares only images close in capture time.
-    Intended for burst-like sequences.
+    Compares images close in capture time, plus files that share the same
+    base stem like DSC02483.ARW and DSC02483.JPG.
     """
     valid = [p for p in photos if p.phash is not None]
     valid.sort(key=lambda p: p.capture_time)
@@ -221,6 +278,22 @@ def cluster_near_duplicates(
                 dsu.union(i, j)
             j += 1
 
+    stem_map: Dict[str, List[int]] = {}
+    for i, p in enumerate(valid):
+        stem_map.setdefault(normalise_stem(p.path), []).append(i)
+
+    for indices in stem_map.values():
+        if len(indices) < 2:
+            continue
+
+        for a_pos in range(len(indices)):
+            for b_pos in range(a_pos + 1, len(indices)):
+                a = indices[a_pos]
+                b = indices[b_pos]
+                dist = valid[a].phash - valid[b].phash
+                if dist <= phash_threshold + 2:
+                    dsu.union(a, b)
+
     groups_map: Dict[int, List[PhotoInfo]] = {}
     for i, p in enumerate(valid):
         root = dsu.find(i)
@@ -228,7 +301,6 @@ def cluster_near_duplicates(
 
     groups = [g for g in groups_map.values() if len(g) > 1]
 
-    # Exclude exact-duplicate-only groups from near groups later by path set logic if needed
     if verbose:
         print(f"Found {len(groups)} near-duplicate groups")
 
@@ -370,8 +442,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    root = args.root.resolve()
-    outdir = args.outdir.resolve()
+    root = args.root.expanduser().resolve()
+    outdir = args.outdir.expanduser().resolve()
     outdir.mkdir(parents=True, exist_ok=True)
 
     if args.verbose:
