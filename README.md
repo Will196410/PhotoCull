@@ -162,7 +162,7 @@ This will be downloaded automatically by Hugging Face the first time the script 
 Example command:
 
 ```bash
-python photo_themes.py "/Volumes/All Photos/Photos" --year 2008
+python scripts/photo_themes.py "/Volumes/All Photos/Photos" --year 2008
 ```
 
 This scans the `2008` folder under the supplied archive root and writes outputs to the configured theme-output root.
@@ -196,7 +196,7 @@ This scans the `2008` folder under the supplied archive root and writes outputs 
 Example with explicit output root:
 
 ```bash
-python photo_themes.py "/Volumes/All Photos/Photos" --year 2008 --output-root "/Volumes/All Photos/theme_output"
+python scripts/photo_themes.py "/Volumes/All Photos/Photos" --year 2008 --output-root "/Volumes/All Photos/theme_output"
 ```
 
 ---
