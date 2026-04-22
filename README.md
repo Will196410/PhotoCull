@@ -374,6 +374,14 @@ Suggested roles:
 
 ---
 
+## Further documentation
+
+- [Project Primer](docs/project_primer.md)
+- [Theme Mapping](docs/theme_mapping.md)
+- [Consolidation Script Spec](docs/consolidation_script_spec.md)
+
+---
+
 ## Notes for contributors
 
 The current system has been shaped by practical use on a large personal archive. That means some defaults reflect one real-world setup, especially around paths and folder layout. Those defaults should remain configurable.
