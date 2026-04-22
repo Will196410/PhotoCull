@@ -231,10 +231,26 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         evidence["Place and Travel"] = max(evidence["Place and Travel"] - 4, 0)
         evidence["Other / Uncertain"] += 3
 
-    # Abstract visual pattern should not drift to travel.
+    # Transport should not leak into Farm Animals unless farm evidence is genuinely strong.
+    if raw_theme == "transport or vehicle" and farm_hits < 2:
+        evidence["Farm Animals"] = 0
+
+    # Abstract visual pattern should not drift to travel or farm.
     if raw_theme == "abstract visual pattern":
         evidence["Nature Detail"] += 2
         evidence["Place and Travel"] = max(evidence["Place and Travel"] - 2, 0)
+        if farm_hits < 2:
+            evidence["Farm Animals"] = 0
+
+    # Macro/detail should beat weak farm contamination.
+    if raw_theme == "macro or texture detail" and farm_hits < 2:
+        evidence["Farm Animals"] = 0
+
+    # Farm Animals should not win from weak stray evidence.
+    farm_theme_exact = (raw_theme == "farm animal")
+    strong_farm_evidence = farm_hits >= 2
+    if not farm_theme_exact and not strong_farm_evidence:
+        evidence["Farm Animals"] = min(evidence["Farm Animals"], 2)
 
     # Atmosphere deserves a real chance to become primary.
     if raw_theme == "sky, cloud, or weather":
@@ -252,6 +268,8 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
             evidence["People and Human Presence"] += 2
         if atmosphere_hits >= 2:
             evidence["Weather, Light, and Atmosphere"] += 2
+        if nature_hits >= 2:
+            evidence["Nature Detail"] += 2
 
     wildlife_conflict_strength = min(evidence["Wildlife"], evidence["Farm Animals"])
     if wildlife_conflict_strength >= 4:
@@ -301,10 +319,17 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         primary = "Wildlife"
         top_score = evidence[primary]
 
+    # Nature Detail should beat ambiguous farm cases unless the theme is explicitly farm animal.
+    if raw_theme != "farm animal":
+        if evidence["Nature Detail"] >= max(evidence["Farm Animals"] - 1, 4):
+            if evidence["Nature Detail"] >= top_score - 1:
+                primary = "Nature Detail"
+                top_score = evidence[primary]
+
     if raw_theme == "farm animal" and evidence["Farm Animals"] >= 6 and evidence["Farm Animals"] > evidence["Wildlife"]:
         primary = "Farm Animals"
         top_score = evidence[primary]
-    elif evidence["Farm Animals"] >= 5 and evidence["Farm Animals"] > evidence["Wildlife"] + 1:
+    elif evidence["Farm Animals"] >= 6 and evidence["Farm Animals"] > evidence["Wildlife"] + 1:
         primary = "Farm Animals"
         top_score = evidence[primary]
 
@@ -329,6 +354,12 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
 
     if primary == "Other / Uncertain":
         confidence = min(confidence, 0.45)
+
+    # Low-confidence farm results should not pretend to be reliable.
+    if primary == "Farm Animals" and confidence < 0.7:
+        primary = "Other / Uncertain"
+        confidence = 0.45
+        review_flags.append("reassigned_from_farm_animals_low_confidence")
 
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
