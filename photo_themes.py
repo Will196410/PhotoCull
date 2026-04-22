@@ -97,7 +97,6 @@ def is_ignored(path: Path):
     return any(fragment in s for fragment in ignored_fragments)
 
 
-from typing import Optional
 def load_exclude_set(exclude_file: Optional[Path]):
     if exclude_file is None:
         return set()
@@ -110,6 +109,7 @@ def load_exclude_set(exclude_file: Optional[Path]):
     excluded = {line.strip().replace("\\", "/") for line in lines if line.strip()}
     print(f"Loaded {len(excluded)} excluded paths from {exclude_file}")
     return excluded
+
 
 def iter_images(scan_root: Path, archive_root: Path, excluded_relative_paths=None):
     excluded_relative_paths = excluded_relative_paths or set()
@@ -127,7 +127,21 @@ def iter_images(scan_root: Path, archive_root: Path, excluded_relative_paths=Non
             continue
 
         yield p
-        
+
+
+def count_candidate_images(scan_root: Path):
+    count = 0
+    for p in scan_root.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            continue
+        if is_ignored(p):
+            continue
+        count += 1
+    return count
+
+
 def chunked(seq, size):
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
@@ -249,6 +263,8 @@ def main():
     thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Scanning {year_dir}...")
+
+    total_candidates_before_exclusions = count_candidate_images(year_dir)
 
     image_paths = list(iter_images(year_dir, root, excluded_relative_paths=excluded_relative_paths))
     if args.max_images > 0:
@@ -432,13 +448,45 @@ def main():
 
     cluster_order = sorted(grouped.keys(), key=lambda cid: len(grouped[cid]), reverse=True)
 
-    excluded_count = len(excluded_relative_paths)
+    excluded_count = max(total_candidates_before_exclusions - len(rows), 0)
+
+    toc_items = []
+    for cid in cluster_order:
+        items = grouped[cid]
+        meta = cluster_label_map[cid]
+        anchor_id = f"theme-{cid}"
+        safe_name = html.escape(meta["display_theme_name"])
+        toc_items.append(
+            f'<li><a href="#{anchor_id}">{safe_name}</a> <span class="toc-count">({len(items)})</span></li>'
+        )
+
+    toc_html = f"""
+        <div class="top-panel">
+            <div class="stats">
+                <div><strong>Year:</strong> {args.year}</div>
+                <div><strong>Total candidates found:</strong> {total_candidates_before_exclusions}</div>
+                <div><strong>Included after exclusions:</strong> {len(rows)}</div>
+                <div><strong>Excluded before clustering:</strong> {excluded_count}</div>
+                <div><strong>Theme clusters:</strong> {len(cluster_order)}</div>
+            </div>
+            <div class="toc">
+                <div class="toc-title">Jump to a theme</div>
+                <ul>
+                    {"".join(toc_items)}
+                </ul>
+            </div>
+        </div>
+    """
+
     html_header = f"""
     <html>
     <head>
     <meta charset="utf-8">
     <title>Photo Themes {args.year}</title>
     <style>
+        html {{
+            scroll-behavior: smooth;
+        }}
         body {{
             background: #111;
             color: white;
@@ -459,14 +507,73 @@ def main():
             color: #bbb;
             margin-bottom: 22px;
         }}
+        .top-panel {{
+            display: grid;
+            grid-template-columns: minmax(280px, 1fr) minmax(420px, 2fr);
+            gap: 24px;
+            margin-bottom: 28px;
+            padding: 18px;
+            background: #181818;
+            border: 1px solid #333;
+            border-radius: 12px;
+        }}
+        .stats {{
+            color: #ddd;
+            font-size: 14px;
+            line-height: 1.8;
+        }}
+        .toc-title {{
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #fff;
+        }}
+        .toc ul {{
+            margin: 0;
+            padding-left: 18px;
+            columns: 2;
+            column-gap: 24px;
+        }}
+        .toc li {{
+            margin-bottom: 6px;
+            break-inside: avoid;
+        }}
+        .toc a {{
+            color: #9dd;
+            text-decoration: none;
+        }}
+        .toc a:hover {{
+            text-decoration: underline;
+        }}
+        .toc-count {{
+            color: #888;
+            font-size: 12px;
+        }}
         .theme-block {{
             margin-bottom: 34px;
             padding-bottom: 18px;
             border-bottom: 1px solid #333;
+            scroll-margin-top: 20px;
+        }}
+        .theme-head {{
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 6px;
         }}
         .theme-title {{
             font-size: 22px;
-            margin-bottom: 6px;
+            margin-bottom: 0;
+        }}
+        .back-top {{
+            color: #9dd;
+            font-size: 12px;
+            text-decoration: none;
+            white-space: nowrap;
+        }}
+        .back-top:hover {{
+            text-decoration: underline;
         }}
         .theme-meta {{
             color: #9dd;
@@ -548,12 +655,25 @@ def main():
         .toast.show {{
             opacity: 1;
         }}
+        @media (max-width: 900px) {{
+            .top-panel {{
+                grid-template-columns: 1fr;
+            }}
+            .toc ul {{
+                columns: 1;
+            }}
+        }}
     </style>
     </head>
     <body>
-    <div class="wrap">
+    <div class="wrap" id="top">
         <h1>Photo Themes for {args.year}</h1>
-        <div class="summary">{len(rows)} images grouped into {len(cluster_order)} theme clusters. Excluded before clustering: {excluded_count}.</div>
+        <div class="summary">
+            {len(rows)} images grouped into {len(cluster_order)} theme clusters.
+            Excluded before clustering: {excluded_count}.
+            Total candidates in year folder: {total_candidates_before_exclusions}.
+        </div>
+        {toc_html}
     """
 
     script = """
@@ -610,10 +730,14 @@ def main():
         theme_name = html.escape(meta["display_theme_name"])
         top_labels = " • ".join(html.escape(clean_prompt_label(x)) for x in meta["top_labels"])
         dominant_folder = html.escape(meta["dominant_folder"])
+        anchor_id = f"theme-{cid}"
 
         block = f"""
-        <div class="theme-block">
-            <div class="theme-title">{theme_name}</div>
+        <div class="theme-block" id="{anchor_id}">
+            <div class="theme-head">
+                <div class="theme-title">{theme_name}</div>
+                <a class="back-top" href="#top">Back to top</a>
+            </div>
             <div class="theme-meta">{len(items)} images • dominant folder: {dominant_folder}</div>
             <div class="theme-labels">{top_labels}</div>
             <div class="grid">
