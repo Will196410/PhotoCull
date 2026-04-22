@@ -93,6 +93,7 @@ Installatin:
 Inside the virtual environment:
 ```bash
 python -m pip install pillow imagehash
+python -m pip install rawpy pillow imagehash
 ```
 To run:
 ```bash
