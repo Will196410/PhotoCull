@@ -113,7 +113,8 @@ def load_exclude_set(exclude_file: Optional[Path]):
 
 def iter_images(scan_root: Path, archive_root: Path, excluded_relative_paths=None):
     excluded_relative_paths = excluded_relative_paths or set()
-    print(f"Found {len(scan_root.rglob("*"))} images.")
+    images = scan_root.rglob("*")
+    print(f"Found {len(images)} images before exclusions.")
     print(f"Found {len(excluded_relative_paths)} images TO EXCLUDE.")
     for p in scan_root.rglob("*"):
         if not p.is_file():
