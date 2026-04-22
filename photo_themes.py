@@ -21,6 +21,8 @@ RAW_EXTENSIONS = {".dng", ".arw", ".cr2", ".nef", ".orf", ".rw2", ".raf"}
 STANDARD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tif", ".tiff", ".webp", ".bmp"}
 SUPPORTED_EXTENSIONS = RAW_EXTENSIONS | STANDARD_EXTENSIONS
 
+DEFAULT_OUTPUT_ROOT = Path("/Volumes/All Photos/theme_output")
+
 THEME_PROMPTS = [
     "a coastal landscape photograph",
     "a harbour or port scene with boats",
@@ -245,6 +247,11 @@ def main():
     parser.add_argument("--min-cluster-size", type=int, default=6, help="Clusters smaller than this become Miscellaneous")
     parser.add_argument("--max-images", type=int, default=0, help="Optional cap for testing; 0 means no limit")
     parser.add_argument("--exclude-file", default="", help="Optional text file of relative paths to exclude, one per line")
+    parser.add_argument(
+        "--output-root",
+        default=str(DEFAULT_OUTPUT_ROOT),
+        help="Root folder for theme outputs, default: /Volumes/All Photos/theme_output",
+    )
     args = parser.parse_args()
 
     root = Path(args.root).expanduser().resolve()
@@ -257,12 +264,14 @@ def main():
     exclude_file = Path(args.exclude_file).expanduser().resolve() if args.exclude_file else None
     excluded_relative_paths = load_exclude_set(exclude_file)
 
-    out_dir = Path("theme_output") / str(args.year)
+    output_root = Path(args.output_root).expanduser().resolve()
+    out_dir = output_root / str(args.year)
     thumbs_dir = out_dir / "thumbs"
     out_dir.mkdir(parents=True, exist_ok=True)
     thumbs_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Scanning {year_dir}...")
+    print(f"Writing output to {out_dir}...")
 
     total_candidates_before_exclusions = count_candidate_images(year_dir)
 
@@ -468,6 +477,7 @@ def main():
                 <div><strong>Included after exclusions:</strong> {len(rows)}</div>
                 <div><strong>Excluded before clustering:</strong> {excluded_count}</div>
                 <div><strong>Theme clusters:</strong> {len(cluster_order)}</div>
+                <div><strong>Output folder:</strong> {html.escape(str(out_dir))}</div>
             </div>
             <div class="toc">
                 <div class="toc-title">Jump to a theme</div>
