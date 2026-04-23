@@ -4,7 +4,7 @@ import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import pandas as pd
 
@@ -23,32 +23,37 @@ MASTER_CATEGORIES = [
 
 DEFAULT_THEME_OUTPUT_DIRNAME = "theme_output"
 DEFAULT_MASTER_GALLERY_DIRNAME = "master_gallery"
+DEFAULT_PROMPTS_FILE = Path(__file__).resolve().parent / "theme_prompts.txt"
 
-EXACT_PRIMARY_MAP = {
-    "coastal landscape": "Landscape",
-    "harbour or port with boats": "Waterside and Harbour",
-    "harbour or port": "Waterside and Harbour",
-    "waterside or river": "Waterside and Harbour",
-    "beach or shoreline": "Landscape",
-    "countryside landscape": "Landscape",
-    "woodland or forest": "Landscape",
-    "flower or plant close-up": "Nature Detail",
-    "macro or texture detail": "Nature Detail",
-    "tree or foliage": "Nature Detail",
-    "garden": "Nature Detail",
-    "bird or wildlife": "Wildlife",
-    "farm animal": "Farm Animals",
-    "pet": "Other / Uncertain",
-    "people or group": "People and Human Presence",
-    "portrait of one person": "People and Human Presence",
-    "village, town, or street": "Place and Travel",
-    "travel snapshot of a place": "Place and Travel",
-    "old building or historic architecture": "Place and Travel",
-    "transport or vehicle": "Other / Uncertain",
-    "indoor": "Other / Uncertain",
-    "sky, cloud, or weather": "Weather, Light, and Atmosphere",
-    "abstract visual pattern": "Nature Detail",
-}
+FALLBACK_THEME_PROMPTS = [
+    "a coastal landscape photograph",
+    "a harbour or port scene with boats",
+    "a countryside landscape photograph",
+    "a woodland or forest scene",
+    "a flower or plant close-up photograph",
+    "a bird or wildlife photograph",
+    "a farm animal photograph",
+    "a pet photograph",
+    "an old building or historic architecture photograph",
+    "a village, town, or street scene photograph",
+    "a travel photograph showing a place",
+    "a dramatic sky photograph",
+    "a sunset or sunrise photograph",
+    "a misty or foggy landscape photograph",
+    "a stormy weather photograph",
+    "a moody atmospheric landscape photograph",
+    "a photograph where light and weather create the mood",
+    "a macro or texture detail photograph",
+    "a waterside or river scene",
+    "a beach or shoreline photograph",
+    "a people or group photograph",
+    "a portrait of one person",
+    "a garden photograph",
+    "a tree or foliage photograph",
+    "a transport or vehicle photograph",
+    "an indoor scene photograph",
+    "an abstract visual pattern photograph",
+]
 
 SECONDARY_HINTS = {
     "Landscape": ["Weather, Light, and Atmosphere"],
@@ -92,7 +97,7 @@ RURAL_KEYWORDS = {
 ATMOSPHERE_KEYWORDS = {
     "weather", "mist", "misty", "fog", "foggy", "storm", "stormy", "sunset", "sunrise",
     "dramatic", "rain", "rainy", "frost", "cloud", "clouds", "sky", "moody", "gloom",
-    "golden", "dusk", "dawn"
+    "golden", "dusk", "dawn", "atmospheric", "light"
 }
 NATURE_DETAIL_KEYWORDS = {
     "flower", "flowers", "plant", "plants", "leaf", "leaves", "foliage", "macro",
@@ -132,6 +137,87 @@ def split_csvish(value: str) -> List[str]:
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
+def load_theme_prompts(prompts_file: Optional[Path]) -> List[str]:
+    if prompts_file is None:
+        return FALLBACK_THEME_PROMPTS
+
+    if not prompts_file.exists():
+        print(f"Warning: prompts file not found: {prompts_file}")
+        print("Falling back to built-in prompts.")
+        return FALLBACK_THEME_PROMPTS
+
+    lines = prompts_file.read_text(encoding="utf-8").splitlines()
+    prompts = []
+    for line in lines:
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        prompts.append(text)
+
+    if not prompts:
+        print(f"Warning: prompts file is empty after filtering comments/blanks: {prompts_file}")
+        print("Falling back to built-in prompts.")
+        return FALLBACK_THEME_PROMPTS
+
+    print(f"Loaded {len(prompts)} theme prompts from {prompts_file}")
+    return prompts
+
+
+def infer_category_from_prompt(prompt: str) -> str:
+    label = normalize_text(prompt)
+    tokens = tokenize(label)
+
+    if "farm animal" in label:
+        return "Farm Animals"
+    if "pet" in label:
+        return "Other / Uncertain"
+    if "portrait" in label or "people or group" in label:
+        return "People and Human Presence"
+    if any(word in tokens for word in {"sunset", "sunrise", "misty", "foggy", "stormy", "dramatic", "moody", "atmospheric", "weather", "sky"}):
+        return "Weather, Light, and Atmosphere"
+    if any(word in tokens for word in {"bird", "wildlife"}):
+        return "Wildlife"
+    if any(word in tokens for word in {"flower", "plant", "macro", "texture", "garden", "foliage"}):
+        return "Nature Detail"
+    if any(word in tokens for word in {"harbour", "harbor", "port", "waterside", "river"}):
+        return "Waterside and Harbour"
+    if any(word in tokens for word in {"village", "town", "street", "travel", "architecture", "historic"}):
+        return "Place and Travel"
+    if any(word in tokens for word in {"transport", "vehicle", "indoor"}):
+        return "Other / Uncertain"
+    if any(word in tokens for word in {"coastal", "countryside", "woodland", "forest", "beach", "shoreline", "landscape"}):
+        return "Landscape"
+    if any(word in tokens for word in {"tree"}):
+        return "Nature Detail"
+    if "abstract visual pattern" in label:
+        return "Nature Detail"
+    return "Other / Uncertain"
+
+
+def build_exact_primary_map(theme_prompts: List[str]) -> dict:
+    mapping = {}
+    for prompt in theme_prompts:
+        mapping[normalize_text(prompt)] = infer_category_from_prompt(prompt)
+
+    # Backward compatibility for older annual outputs.
+    mapping.update({
+        "travel snapshot of a place": "Place and Travel",
+        "sky, cloud, or weather": "Weather, Light, and Atmosphere",
+    })
+    return mapping
+
+
+def build_atmosphere_theme_names(theme_prompts: List[str]) -> set:
+    names = set()
+    for prompt in theme_prompts:
+        label = normalize_text(prompt)
+        category = infer_category_from_prompt(prompt)
+        if category == "Weather, Light, and Atmosphere":
+            names.add(label)
+    names.add("sky, cloud, or weather")
+    return names
+
+
 def guess_year_folders(theme_output_root: Path) -> List[Path]:
     year_dirs = []
     for child in theme_output_root.iterdir():
@@ -168,7 +254,7 @@ def has_any_keyword(tokens: set, keywords: set) -> bool:
     return keyword_score(tokens, keywords) > 0
 
 
-def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
+def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_theme_names: set) -> Tuple[str, float, List[str], dict]:
     review_flags = []
     raw_theme = normalize_text(row.get("theme_name", ""))
     top_labels = [
@@ -192,12 +278,12 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
     landscape_hits = keyword_score(tokens, LANDSCAPE_KEYWORDS)
     place_hits = keyword_score(tokens, PLACE_TRAVEL_KEYWORDS)
 
-    if raw_theme in EXACT_PRIMARY_MAP:
-        evidence[EXACT_PRIMARY_MAP[raw_theme]] += 8
+    if raw_theme in exact_primary_map:
+        evidence[exact_primary_map[raw_theme]] += 8
 
     for label in top_labels:
-        if label in EXACT_PRIMARY_MAP:
-            evidence[EXACT_PRIMARY_MAP[label]] += 5
+        if label in exact_primary_map:
+            evidence[exact_primary_map[label]] += 5
 
     evidence["Waterside and Harbour"] += waterside_hits * 2
     evidence["Wildlife"] += wildlife_hits * 2
@@ -209,7 +295,6 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
     evidence["Place and Travel"] += place_hits * 2
     evidence["Other / Uncertain"] += pet_hits * 2
 
-    # Farm Animals should be stricter.
     if raw_theme == "farm animal":
         evidence["Farm Animals"] += 6
     else:
@@ -218,7 +303,6 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         elif farm_hits == 1:
             evidence["Farm Animals"] += 1
 
-    # Pets soften animal classification rather than strengthen farm/wild.
     if pet_hits > 0:
         evidence["Farm Animals"] = max(evidence["Farm Animals"] - 2, 0)
         if wildlife_hits == 0:
@@ -226,40 +310,33 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         if people_hits > 0:
             evidence["People and Human Presence"] += 1
 
-    # Indoor/transport should not dominate Place and Travel.
     if raw_theme in {"indoor", "transport or vehicle"}:
         evidence["Place and Travel"] = max(evidence["Place and Travel"] - 4, 0)
         evidence["Other / Uncertain"] += 3
 
-    # Transport should not leak into Farm Animals unless farm evidence is genuinely strong.
     if raw_theme == "transport or vehicle" and farm_hits < 2:
         evidence["Farm Animals"] = 0
 
-    # Abstract visual pattern should not drift to travel or farm.
     if raw_theme == "abstract visual pattern":
         evidence["Nature Detail"] += 2
         evidence["Place and Travel"] = max(evidence["Place and Travel"] - 2, 0)
         if farm_hits < 2:
             evidence["Farm Animals"] = 0
 
-    # Macro/detail should beat weak farm contamination.
     if raw_theme == "macro or texture detail" and farm_hits < 2:
         evidence["Farm Animals"] = 0
 
-    # Farm Animals should not win from weak stray evidence.
     farm_theme_exact = (raw_theme == "farm animal")
     strong_farm_evidence = farm_hits >= 2
     if not farm_theme_exact and not strong_farm_evidence:
         evidence["Farm Animals"] = min(evidence["Farm Animals"], 2)
 
-    # Atmosphere deserves a real chance to become primary.
-    if raw_theme == "sky, cloud, or weather":
-        evidence["Weather, Light, and Atmosphere"] += 4
+    if raw_theme in atmosphere_theme_names:
+        evidence["Weather, Light, and Atmosphere"] += 6
     if atmosphere_hits >= 2:
         evidence["Weather, Light, and Atmosphere"] += 2
 
-    # Travel snapshot is too broad; trim some of its dominance when stronger evidence exists.
-    if raw_theme == "travel snapshot of place":
+    if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if landscape_hits >= 2:
             evidence["Landscape"] += 2
         if waterside_hits >= 2:
@@ -298,7 +375,7 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         and abs(evidence["Weather, Light, and Atmosphere"] - atmosphere_other) <= 2
     ):
         review_flags.append("possible_atmosphere_primary_conflict")
-        
+
     nonzero_evidence = Counter({k: v for k, v in evidence.items() if v > 0})
     if not nonzero_evidence:
         return "Other / Uncertain", 0.2, ["low_mapping_confidence"], {
@@ -310,12 +387,19 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
-    # Preference rules.
     if evidence["People and Human Presence"] >= 5 and evidence["People and Human Presence"] >= top_score - 1:
         primary = "People and Human Presence"
         top_score = evidence[primary]
 
-    if evidence["Weather, Light, and Atmosphere"] >= 6 and evidence["Weather, Light, and Atmosphere"] >= top_score - 1:
+    if raw_theme in atmosphere_theme_names:
+        if evidence["Weather, Light, and Atmosphere"] >= max(
+            evidence["Landscape"],
+            evidence["Waterside and Harbour"],
+            evidence["Rural Life and Working Country"],
+        ) - 1:
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence[primary]
+    elif evidence["Weather, Light, and Atmosphere"] >= 6 and evidence["Weather, Light, and Atmosphere"] >= top_score - 1:
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence[primary]
 
@@ -323,7 +407,6 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         primary = "Wildlife"
         top_score = evidence[primary]
 
-    # Nature Detail should beat ambiguous farm cases unless the theme is explicitly farm animal.
     if raw_theme != "farm animal":
         if evidence["Nature Detail"] >= max(evidence["Farm Animals"] - 1, 4):
             if evidence["Nature Detail"] >= top_score - 1:
@@ -341,7 +424,6 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
         primary = "Landscape"
         top_score = evidence[primary]
 
-    # If uncertainty remains high, prefer honesty over bad precision.
     if top_score <= 3:
         primary = "Other / Uncertain"
         top_score = evidence[primary]
@@ -359,18 +441,17 @@ def map_primary_category(row: pd.Series) -> Tuple[str, float, List[str], dict]:
     if primary == "Other / Uncertain":
         confidence = min(confidence, 0.45)
 
-    # Low-confidence farm results should not pretend to be reliable.
     if primary == "Farm Animals" and confidence < 0.7:
         primary = "Other / Uncertain"
         confidence = 0.45
         review_flags.append("reassigned_from_farm_animals_low_confidence")
 
     if primary == "Nature Detail" and confidence < 0.7:
-        if raw_theme in {"travel snapshot of place", "transport or vehicle", "indoor"}:
+        if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place", "transport or vehicle", "indoor"}:
             primary = "Other / Uncertain"
             confidence = 0.45
             review_flags.append("reassigned_from_nature_detail_low_confidence")
-    
+
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
 
