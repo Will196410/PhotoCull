@@ -32,4 +32,4 @@ a portrait of one person
 # Other
 # a transport or vehicle photograph
 an indoor scene photograph
-an abstract visual pattern photograph
+# an abstract visual pattern photograph
