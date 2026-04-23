@@ -8,6 +8,10 @@ from typing import List, Tuple, Optional
 
 import pandas as pd
 
+# ============================================================================
+# CONSTANTS AND CONFIG
+# ============================================================================
+
 MASTER_CATEGORIES = [
     "Landscape",
     "Waterside and Harbour",
@@ -112,6 +116,9 @@ PLACE_TRAVEL_KEYWORDS = {
     "city", "market", "place", "urban", "square", "plaza", "church", "cathedral"
 }
 
+# ============================================================================
+# TEXT NORMALIZATION HELPERS
+# ============================================================================
 
 def normalize_text(value) -> str:
     if value is None:
@@ -136,6 +143,9 @@ def split_csvish(value: str) -> List[str]:
         return []
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
+# ============================================================================
+# PROMPT FILE LOADING AND PROMPT-TO-CATEGORY INFERENCE
+# ============================================================================
 
 def load_theme_prompts(prompts_file: Optional[Path]) -> List[str]:
     if prompts_file is None:
@@ -215,6 +225,9 @@ def build_atmosphere_theme_names(theme_prompts: List[str]) -> set:
     names.add("sky, cloud, or weather")
     return names
 
+# ============================================================================
+# FILE DISCOVERY HELPERS
+# ============================================================================
 
 def guess_year_folders(theme_output_root: Path) -> List[Path]:
     year_dirs = []
@@ -229,6 +242,9 @@ def find_year_files(year_dir: Path, year: str) -> Tuple[Path, Path]:
     themes_csv = year_dir / f"{year}_themes.csv"
     return images_csv, themes_csv
 
+# ============================================================================
+# EVIDENCE HELPERS
+# ============================================================================
 
 def keyword_score(tokens: set, keywords: set) -> int:
     return len(tokens & keywords)
@@ -251,8 +267,18 @@ def collect_text_fields(row: pd.Series) -> str:
 def has_any_keyword(tokens: set, keywords: set) -> bool:
     return keyword_score(tokens, keywords) > 0
 
+# ============================================================================
+# PRIMARY CATEGORY MAPPING
+# ============================================================================
 
-def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_theme_names: set) -> Tuple[str, float, List[str], dict]:
+def map_primary_category(
+    row: pd.Series,
+    exact_primary_map: dict,
+    atmosphere_theme_names: set,
+) -> Tuple[str, float, List[str], dict]:
+    # ------------------------------------------------------------------------
+    # EXTRACT AND NORMALIZE INPUT TEXT
+    # ------------------------------------------------------------------------
     review_flags = []
     raw_theme = normalize_text(row.get("theme_name", ""))
     top_labels = [
@@ -263,6 +289,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     full_text = normalize_text(collect_text_fields(row))
     tokens = tokenize(full_text)
 
+    # ------------------------------------------------------------------------
+    # INITIALIZE EVIDENCE
+    # ------------------------------------------------------------------------
     evidence = Counter()
 
     pet_hits = keyword_score(tokens, PET_KEYWORDS)
@@ -276,6 +305,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     landscape_hits = keyword_score(tokens, LANDSCAPE_KEYWORDS)
     place_hits = keyword_score(tokens, PLACE_TRAVEL_KEYWORDS)
 
+    # ------------------------------------------------------------------------
+    # BASE EVIDENCE FROM THEME LABELS
+    # ------------------------------------------------------------------------
     if raw_theme in exact_primary_map:
         evidence[exact_primary_map[raw_theme]] += 8
 
@@ -283,6 +315,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         if label in exact_primary_map:
             evidence[exact_primary_map[label]] += 5
 
+    # ------------------------------------------------------------------------
+    # BASE EVIDENCE FROM KEYWORD HITS
+    # ------------------------------------------------------------------------
     evidence["Waterside and Harbour"] += waterside_hits * 2
     evidence["Wildlife"] += wildlife_hits * 2
     evidence["People and Human Presence"] += people_hits * 2
@@ -293,6 +328,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     evidence["Place and Travel"] += place_hits * 2
     evidence["Other / Uncertain"] += pet_hits * 2
 
+    # ------------------------------------------------------------------------
+    # SPECIAL EVIDENCE ADJUSTMENTS
+    # ------------------------------------------------------------------------
     if raw_theme == "farm animal":
         evidence["Farm Animals"] += 6
     else:
@@ -346,6 +384,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         if nature_hits >= 2:
             evidence["Nature Detail"] += 2
 
+    # ------------------------------------------------------------------------
+    # REVIEW FLAG DETECTION
+    # ------------------------------------------------------------------------
     wildlife_conflict_strength = min(evidence["Wildlife"], evidence["Farm Animals"])
     if wildlife_conflict_strength >= 4:
         review_flags.append("possible_wildlife_farm_conflict")
@@ -374,6 +415,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     ):
         review_flags.append("possible_atmosphere_primary_conflict")
 
+    # ------------------------------------------------------------------------
+    # FILTER ZERO EVIDENCE AND EARLY EXIT
+    # ------------------------------------------------------------------------
     nonzero_evidence = Counter({k: v for k, v in evidence.items() if v > 0})
     if not nonzero_evidence:
         return "Other / Uncertain", 0.2, ["low_mapping_confidence"], {
@@ -381,10 +425,16 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
             "evidence": {},
         }
 
+    # ------------------------------------------------------------------------
+    # INITIAL RANKING
+    # ------------------------------------------------------------------------
     ranked = nonzero_evidence.most_common()
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
+    # ------------------------------------------------------------------------
+    # DECISION-STAGE OVERRIDES AND PREFERENCE RULES
+    # ------------------------------------------------------------------------
     if raw_theme in atmosphere_theme_names:
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence["Weather, Light, and Atmosphere"]
@@ -418,6 +468,28 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         primary = "Farm Animals"
         top_score = evidence[primary]
 
+    # INDOOR OVERRIDE: DO NOT LET INDOOR STAY A WEAK DEFAULT WHEN A STRONGER
+    # HUMAN / PLACE / WATERSIDE READING IS ALREADY PRESENT.
+    if raw_theme == "indoor":
+        if (
+            evidence["People and Human Presence"] >= 5
+            and evidence["People and Human Presence"] >= top_score - 1
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
+        elif (
+            evidence["Place and Travel"] >= 5
+            and evidence["Place and Travel"] >= top_score - 1
+        ):
+            primary = "Place and Travel"
+            top_score = evidence["Place and Travel"]
+        elif (
+            evidence["Waterside and Harbour"] >= 5
+            and evidence["Waterside and Harbour"] >= top_score - 1
+        ):
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if (
             evidence["Waterside and Harbour"] >= 5
@@ -436,10 +508,16 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         primary = "Landscape"
         top_score = evidence[primary]
 
+    # ------------------------------------------------------------------------
+    # FALLBACK TO UNCERTAIN WHEN EVIDENCE IS TOO WEAK
+    # ------------------------------------------------------------------------
     if top_score <= 3:
         primary = "Other / Uncertain"
         top_score = evidence[primary]
 
+    # ------------------------------------------------------------------------
+    # CONFIDENCE CALCULATION
+    # ------------------------------------------------------------------------
     confidence = 0.5
     if top_score >= 10 and (top_score - second_score) >= 4:
         confidence = 0.96
@@ -453,28 +531,46 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     if primary == "Other / Uncertain":
         confidence = min(confidence, 0.45)
 
+    # ------------------------------------------------------------------------
+    # LOW-CONFIDENCE REASSIGNMENTS
+    # ------------------------------------------------------------------------
     if primary == "Farm Animals" and confidence < 0.7:
         primary = "Other / Uncertain"
         confidence = 0.45
         review_flags.append("reassigned_from_farm_animals_low_confidence")
 
     if primary == "Nature Detail" and confidence < 0.7:
-        if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place", "transport or vehicle", "indoor"}:
+        if raw_theme in {
+            "travel snapshot of a place",
+            "travel photograph showing a place",
+            "travel showing place",
+            "transport or vehicle",
+            "indoor",
+        }:
             primary = "Other / Uncertain"
             confidence = 0.45
             review_flags.append("reassigned_from_nature_detail_low_confidence")
 
+    # ------------------------------------------------------------------------
+    # FINAL REVIEW FLAGS
+    # ------------------------------------------------------------------------
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"} and confidence < 0.7:
         review_flags.append("generic_travel_theme_low_confidence")
 
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
 
+    # ------------------------------------------------------------------------
+    # RETURN RESULT
+    # ------------------------------------------------------------------------
     return primary, confidence, sorted(set(review_flags)), {
         "full_text": full_text,
         "evidence": dict(nonzero_evidence),
     }
 
+# ============================================================================
+# SECONDARY CATEGORY DERIVATION
+# ============================================================================
 
 def derive_secondary_categories(primary: str, row: pd.Series, evidence: dict) -> List[str]:
     secondaries = set(SECONDARY_HINTS.get(primary, []))
@@ -504,6 +600,9 @@ def derive_secondary_categories(primary: str, row: pd.Series, evidence: dict) ->
     secondaries.discard(primary)
     return [c for c in MASTER_CATEGORIES if c in secondaries]
 
+# ============================================================================
+# OUTPUT BUILDERS
+# ============================================================================
 
 def build_category_summary(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
@@ -535,7 +634,9 @@ def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master
         if not items:
             continue
         anchor = f"cat-{re.sub(r'[^a-z0-9]+', '-', category.lower()).strip('-')}"
-        toc_items.append(f'<li><a href="#{anchor}">{html.escape(category)}</a> <span class="toc-count">({len(items)})</span></li>')
+        toc_items.append(
+            f'<li><a href="#{anchor}">{html.escape(category)}</a> <span class="toc-count">({len(items)})</span></li>'
+        )
         block = [
             f'<div class="category-block" id="{anchor}">',
             '<div class="category-head">',
@@ -614,7 +715,7 @@ def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master
             </div>
             {''.join(blocks)}
             <div id="toast" class="toast"></div>
-        </div> 
+        </div>
 
         <script>
         async function copyText(text) {{
@@ -653,12 +754,15 @@ def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master
             showToast(ok ? 'Copied path' : 'Could not copy path');
         }}
         </script>
-        
-    </body> 
+
+    </body>
     </html>
     """
     output_path.write_text(page, encoding="utf-8")
 
+# ============================================================================
+# YEAR DATA LOADING
+# ============================================================================
 
 def process_year(year_dir: Path, strict: bool = False) -> pd.DataFrame:
     year = year_dir.name
@@ -678,6 +782,9 @@ def process_year(year_dir: Path, strict: bool = False) -> pd.DataFrame:
     images_df["year"] = year
     return images_df
 
+# ============================================================================
+# MAIN PROGRAM
+# ============================================================================
 
 def main():
     parser = argparse.ArgumentParser(description="Consolidate annual theme outputs into a master gallery view")
