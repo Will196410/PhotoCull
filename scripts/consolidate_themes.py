@@ -363,8 +363,6 @@ def map_primary_category(
     full_text = normalize_text(collect_text_fields(row))
     tokens = tokenize(full_text)
 
-    secondary_hints = rules["secondary_hints"]
-    _ = secondary_hints  # reserved for consistency/debugging
     keywords = {k: set(v) for k, v in rules["keywords"].items()}
     t = rules["thresholds"]
 
@@ -420,7 +418,9 @@ def map_primary_category(
             evidence["People and Human Presence"] += t["pet_people_bonus"]
 
     if raw_theme in {"indoor", "transport or vehicle"}:
-        evidence["Place and Travel"] = max(evidence["Place and Travel"] - t["indoor_transport_place_penalty"], 0)
+        evidence["Place and Travel"] = max(
+            evidence["Place and Travel"] - t["indoor_transport_place_penalty"], 0
+        )
         evidence["Other / Uncertain"] += t["indoor_transport_uncertain_bonus"]
 
     if raw_theme == "transport or vehicle" and farm_hits < 2:
@@ -428,7 +428,9 @@ def map_primary_category(
 
     if raw_theme == "abstract visual pattern":
         evidence["Nature Detail"] += t["abstract_nature_bonus"]
-        evidence["Place and Travel"] = max(evidence["Place and Travel"] - t["abstract_place_penalty"], 0)
+        evidence["Place and Travel"] = max(
+            evidence["Place and Travel"] - t["abstract_place_penalty"], 0
+        )
         if farm_hits < 2:
             evidence["Farm Animals"] = 0
 
@@ -438,7 +440,9 @@ def map_primary_category(
     farm_theme_exact = (raw_theme == "farm animal")
     strong_farm_evidence = farm_hits >= 2
     if not farm_theme_exact and not strong_farm_evidence:
-        evidence["Farm Animals"] = min(evidence["Farm Animals"], t["farm_cap_without_strong_evidence"])
+        evidence["Farm Animals"] = min(
+            evidence["Farm Animals"], t["farm_cap_without_strong_evidence"]
+        )
 
     if raw_theme in atmosphere_theme_names:
         evidence["Weather, Light, and Atmosphere"] += t["atmosphere_theme_bonus"]
@@ -473,9 +477,13 @@ def map_primary_category(
         evidence["Landscape"],
         evidence["Waterside and Harbour"],
     )
-    if evidence["People and Human Presence"] >= t["people_place_conflict_threshold"] and people_place_other >= t["people_place_conflict_threshold"]:
+    if (
+        raw_theme != "indoor"
+        and evidence["People and Human Presence"] >= t["people_place_conflict_threshold"]
+        and people_place_other >= t["people_place_conflict_threshold"]
+    ):
         review_flags.append("possible_people_place_conflict")
-# start
+
     atmosphere_other = max(
         evidence["Landscape"],
         evidence["Waterside and Harbour"],
@@ -488,7 +496,7 @@ def map_primary_category(
         and abs(evidence["Weather, Light, and Atmosphere"] - atmosphere_other) <= 2
     ):
         review_flags.append("possible_atmosphere_primary_conflict")
-# stop
+
     # ------------------------------------------------------------------------
     # INITIAL RANKING
     # ------------------------------------------------------------------------
@@ -510,12 +518,18 @@ def map_primary_category(
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence["Weather, Light, and Atmosphere"]
 
-    if evidence["People and Human Presence"] >= t["people_override_min"] and evidence["People and Human Presence"] >= top_score - 1:
+    if (
+        evidence["People and Human Presence"] >= t["people_override_min"]
+        and evidence["People and Human Presence"] >= top_score - 1
+    ):
         primary = "People and Human Presence"
         top_score = evidence["People and Human Presence"]
 
     if raw_theme not in atmosphere_theme_names:
-        if evidence["Weather, Light, and Atmosphere"] >= t["weather_override_min"] and evidence["Weather, Light, and Atmosphere"] >= top_score - 1:
+        if (
+            evidence["Weather, Light, and Atmosphere"] >= t["weather_override_min"]
+            and evidence["Weather, Light, and Atmosphere"] >= top_score - 1
+        ):
             primary = "Weather, Light, and Atmosphere"
             top_score = evidence["Weather, Light, and Atmosphere"]
 
@@ -535,7 +549,7 @@ def map_primary_category(
     elif evidence["Farm Animals"] >= t["farm_override_min"] and evidence["Farm Animals"] > evidence["Wildlife"] + t["farm_override_wildlife_gap"]:
         primary = "Farm Animals"
         top_score = evidence["Farm Animals"]
-# start
+
     if raw_theme == "indoor":
         if (
             "people or group" in top_labels
@@ -550,7 +564,10 @@ def map_primary_category(
             primary = "People and Human Presence"
             top_score = evidence["People and Human Presence"]
         elif (
-            "photograph where light and weather create the mood" in top_labels
+            (
+                "photograph where light and weather create the mood" in top_labels
+                or "light and weather create the mood" in full_text
+            )
             and evidence["Weather, Light, and Atmosphere"] >= 4
         ):
             primary = "Weather, Light, and Atmosphere"
@@ -585,36 +602,21 @@ def map_primary_category(
         ):
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
-# stop
-            primary = "Waterside and Harbour"
-            top_score = evidence["Waterside and Harbour"]
-        elif (
-            evidence["People and Human Presence"] >= t["indoor_override_min"]
-            and evidence["People and Human Presence"] >= top_score - 1
-        ):
-            primary = "People and Human Presence"
-            top_score = evidence["People and Human Presence"]
-        elif (
-            evidence["Place and Travel"] >= t["indoor_override_min"]
-            and evidence["Place and Travel"] >= top_score - 1
-        ):
-            primary = "Place and Travel"
-            top_score = evidence["Place and Travel"]
-        elif (
-            evidence["Waterside and Harbour"] >= t["indoor_override_min"]
-            and evidence["Waterside and Harbour"] >= top_score - 1
-        ):
-            primary = "Waterside and Harbour"
-            top_score = evidence["Waterside and Harbour"]
-# stop
+
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
-        if evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"] and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1:
+        if (
+            evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"]
+            and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
+        ):
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
-        elif evidence["Landscape"] >= t["travel_landscape_override_min"] and evidence["Landscape"] >= evidence["Place and Travel"] - 1:
+        elif (
+            evidence["Landscape"] >= t["travel_landscape_override_min"]
+            and evidence["Landscape"] >= evidence["Place and Travel"] - 1
+        ):
             primary = "Landscape"
             top_score = evidence["Landscape"]
-# start
+
     if (
         primary == "Place and Travel"
         and raw_theme not in {"village, town, or street", "old building or historic architecture"}
@@ -622,7 +624,7 @@ def map_primary_category(
     ):
         primary = "Landscape"
         top_score = evidence["Landscape"]
-# stop
+
     # ------------------------------------------------------------------------
     # WEAK-EVIDENCE FALLBACK
     # ------------------------------------------------------------------------
