@@ -475,19 +475,20 @@ def map_primary_category(
     )
     if evidence["People and Human Presence"] >= t["people_place_conflict_threshold"] and people_place_other >= t["people_place_conflict_threshold"]:
         review_flags.append("possible_people_place_conflict")
-
+# start
     atmosphere_other = max(
         evidence["Landscape"],
         evidence["Waterside and Harbour"],
         evidence["Rural Life and Working Country"],
     )
     if (
-        evidence["Weather, Light, and Atmosphere"] >= t["atmosphere_conflict_threshold"]
-        and atmosphere_other >= t["atmosphere_conflict_threshold"]
-        and abs(evidence["Weather, Light, and Atmosphere"] - atmosphere_other) <= t["atmosphere_conflict_max_gap"]
+        raw_theme in atmosphere_theme_names
+        and evidence["Weather, Light, and Atmosphere"] >= 6
+        and atmosphere_other >= 6
+        and abs(evidence["Weather, Light, and Atmosphere"] - atmosphere_other) <= 2
     ):
         review_flags.append("possible_atmosphere_primary_conflict")
-
+# stop
     # ------------------------------------------------------------------------
     # INITIAL RANKING
     # ------------------------------------------------------------------------
@@ -534,18 +535,33 @@ def map_primary_category(
     elif evidence["Farm Animals"] >= t["farm_override_min"] and evidence["Farm Animals"] > evidence["Wildlife"] + t["farm_override_wildlife_gap"]:
         primary = "Farm Animals"
         top_score = evidence["Farm Animals"]
-
+# start
     if raw_theme == "indoor":
-        if evidence["People and Human Presence"] >= t["indoor_override_min"] and evidence["People and Human Presence"] >= top_score - 1:
-            primary = "People and Human Presence"
-            top_score = evidence["People and Human Presence"]
-        elif evidence["Place and Travel"] >= t["indoor_override_min"] and evidence["Place and Travel"] >= top_score - 1:
+        if (
+            "old building or historic architecture" in top_labels
+            and evidence["Place and Travel"] >= 4
+        ):
             primary = "Place and Travel"
             top_score = evidence["Place and Travel"]
-        elif evidence["Waterside and Harbour"] >= t["indoor_override_min"] and evidence["Waterside and Harbour"] >= top_score - 1:
+        elif (
+            evidence["People and Human Presence"] >= t["indoor_override_min"]
+            and evidence["People and Human Presence"] >= top_score - 1
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
+        elif (
+            evidence["Place and Travel"] >= t["indoor_override_min"]
+            and evidence["Place and Travel"] >= top_score - 1
+        ):
+            primary = "Place and Travel"
+            top_score = evidence["Place and Travel"]
+        elif (
+            evidence["Waterside and Harbour"] >= t["indoor_override_min"]
+            and evidence["Waterside and Harbour"] >= top_score - 1
+        ):
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
-
+# stop
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"] and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1:
             primary = "Waterside and Harbour"
@@ -553,11 +569,15 @@ def map_primary_category(
         elif evidence["Landscape"] >= t["travel_landscape_override_min"] and evidence["Landscape"] >= evidence["Place and Travel"] - 1:
             primary = "Landscape"
             top_score = evidence["Landscape"]
-
-    if primary == "Place and Travel" and evidence["Landscape"] >= t["place_to_landscape_fallback_min"]:
+# start
+    if (
+        primary == "Place and Travel"
+        and raw_theme not in {"village, town, or street", "old building or historic architecture"}
+        and evidence["Landscape"] >= t["place_to_landscape_fallback_min"]
+    ):
         primary = "Landscape"
         top_score = evidence["Landscape"]
-
+# stop
     # ------------------------------------------------------------------------
     # WEAK-EVIDENCE FALLBACK
     # ------------------------------------------------------------------------
