@@ -22,8 +22,9 @@ STANDARD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tif", ".tiff", ".webp
 SUPPORTED_EXTENSIONS = RAW_EXTENSIONS | STANDARD_EXTENSIONS
 
 DEFAULT_OUTPUT_ROOT = Path("/Volumes/All Photos/theme_output")
+DEFAULT_PROMPTS_FILE = Path(__file__).resolve().parent / "theme_prompts.txt"
 
-THEME_PROMPTS = [
+FALLBACK_THEME_PROMPTS = [
     "a coastal landscape photograph",
     "a harbour or port scene with boats",
     "a countryside landscape photograph",
@@ -52,6 +53,35 @@ THEME_PROMPTS = [
     "an indoor scene photograph",
     "an abstract visual pattern photograph",
 ]
+
+
+def load_theme_prompts(prompts_file: Optional[Path]):
+    if prompts_file is None:
+        return FALLBACK_THEME_PROMPTS
+
+    if not prompts_file.exists():
+        print(f"Warning: prompts file not found: {prompts_file}")
+        print("Falling back to built-in prompts.")
+        return FALLBACK_THEME_PROMPTS
+
+    lines = prompts_file.read_text(encoding="utf-8").splitlines()
+    prompts = []
+
+    for line in lines:
+        text = line.strip()
+        if not text:
+            continue
+        if text.startswith("#"):
+            continue
+        prompts.append(text)
+
+    if not prompts:
+        print(f"Warning: prompts file is empty after filtering comments/blanks: {prompts_file}")
+        print("Falling back to built-in prompts.")
+        return FALLBACK_THEME_PROMPTS
+
+    print(f"Loaded {len(prompts)} theme prompts from {prompts_file}")
+    return prompts
 
 
 def pick_device():
@@ -257,6 +287,11 @@ def main():
         default=str(DEFAULT_OUTPUT_ROOT),
         help="Root folder for theme outputs, default: /Volumes/All Photos/theme_output",
     )
+    parser.add_argument(
+        "--prompts-file",
+        default=str(DEFAULT_PROMPTS_FILE),
+        help="Text file containing one theme prompt per line",
+    )
     args = parser.parse_args()
 
     root = Path(args.root).expanduser().resolve()
@@ -268,6 +303,9 @@ def main():
 
     exclude_file = Path(args.exclude_file).expanduser().resolve() if args.exclude_file else None
     excluded_relative_paths = load_exclude_set(exclude_file)
+
+    prompts_file = Path(args.prompts_file).expanduser().resolve() if args.prompts_file else None
+    theme_prompts = load_theme_prompts(prompts_file)
 
     output_root = Path(args.output_root).expanduser().resolve()
     out_dir = output_root / str(args.year)
@@ -290,7 +328,7 @@ def main():
 
     print(f"Found {len(image_paths)} images.")
 
-    theme_text_features = build_text_features(THEME_PROMPTS).cpu().numpy()
+    theme_text_features = build_text_features(theme_prompts).cpu().numpy()
 
     rows = []
     failed = []
@@ -385,7 +423,7 @@ def main():
 
         sims = theme_text_features @ centroid
         best_indices = sims.argsort()[::-1][:3]
-        top_labels = [THEME_PROMPTS[i] for i in best_indices]
+        top_labels = [theme_prompts[i] for i in best_indices]
 
         dominant_folder = get_dominant_subfolder(items)
 
