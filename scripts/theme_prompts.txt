@@ -6,7 +6,7 @@ a woodland or forest scene
 a waterside or river scene
 a beach or shoreline photograph
 a village, town, or street scene photograph
-a travel photograph showing a place
+# a travel photograph showing a place
 an old building or historic architecture photograph
 
 # Atmosphere / light / weather
