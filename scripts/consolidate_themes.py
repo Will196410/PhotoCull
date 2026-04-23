@@ -538,11 +538,23 @@ def map_primary_category(
 # start
     if raw_theme == "indoor":
         if (
+            "people or group" in top_labels
+            and evidence["People and Human Presence"] >= 4
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
+        elif (
             "portrait of one person" in top_labels
             and evidence["People and Human Presence"] >= 4
         ):
             primary = "People and Human Presence"
             top_score = evidence["People and Human Presence"]
+        elif (
+            "photograph where light and weather create the mood" in top_labels
+            and evidence["Weather, Light, and Atmosphere"] >= 4
+        ):
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
         elif (
             "old building or historic architecture" in top_labels
             and evidence["Place and Travel"] >= 4
@@ -553,6 +565,27 @@ def map_primary_category(
             "waterside or river" in top_labels
             and evidence["Waterside and Harbour"] >= 4
         ):
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+        elif (
+            evidence["People and Human Presence"] >= t["indoor_override_min"]
+            and evidence["People and Human Presence"] >= top_score - 1
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
+        elif (
+            evidence["Place and Travel"] >= t["indoor_override_min"]
+            and evidence["Place and Travel"] >= top_score - 1
+        ):
+            primary = "Place and Travel"
+            top_score = evidence["Place and Travel"]
+        elif (
+            evidence["Waterside and Harbour"] >= t["indoor_override_min"]
+            and evidence["Waterside and Harbour"] >= top_score - 1
+        ):
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+# stop
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
         elif (
