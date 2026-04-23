@@ -398,7 +398,7 @@ def map_primary_category(
     evidence["Wildlife"] += wildlife_hits * 2
     evidence["People and Human Presence"] += people_hits * 2
     evidence["Rural Life and Working Country"] += rural_hits * 2
-    evidence["Weather, Light, and Atmosphere"] += atmosphere_hits * 3
+    evidence["Weather, Light, and Atmosphere"] += atmosphere_hits * 2
     evidence["Nature Detail"] += nature_hits * 2
     evidence["Landscape"] += landscape_hits * 2
     evidence["Place and Travel"] += place_hits * 2
