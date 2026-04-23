@@ -538,11 +538,23 @@ def map_primary_category(
 # start
     if raw_theme == "indoor":
         if (
+            "portrait of one person" in top_labels
+            and evidence["People and Human Presence"] >= 4
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
+        elif (
             "old building or historic architecture" in top_labels
             and evidence["Place and Travel"] >= 4
         ):
             primary = "Place and Travel"
             top_score = evidence["Place and Travel"]
+        elif (
+            "waterside or river" in top_labels
+            and evidence["Waterside and Harbour"] >= 4
+        ):
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
         elif (
             evidence["People and Human Presence"] >= t["indoor_override_min"]
             and evidence["People and Human Presence"] >= top_score - 1
