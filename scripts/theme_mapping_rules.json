@@ -1,0 +1,104 @@
+{
+  "secondary_hints": {
+    "Landscape": ["Weather, Light, and Atmosphere"],
+    "Waterside and Harbour": ["Landscape"],
+    "Nature Detail": [],
+    "Wildlife": [],
+    "Farm Animals": ["Rural Life and Working Country"],
+    "People and Human Presence": [],
+    "Place and Travel": [],
+    "Rural Life and Working Country": ["Landscape"],
+    "Weather, Light, and Atmosphere": ["Landscape"],
+    "Other / Uncertain": []
+  },
+  "aliases": {
+    "travel snapshot of a place": "Place and Travel",
+    "sky, cloud, or weather": "Weather, Light, and Atmosphere"
+  },
+  "keywords": {
+    "waterside": [
+      "harbour", "harbor", "port", "boat", "boats", "pier", "quay", "jetty", "marina",
+      "river", "waterside", "shore", "shoreline", "fishing", "dock", "docks"
+    ],
+    "wildlife": [
+      "wildlife", "bird", "birds", "bear", "bears", "deer", "fox", "foxes", "seal", "seals",
+      "squirrel", "squirrels", "raptor", "raptors", "owl", "owls", "eagle", "eagles",
+      "hawk", "hawks", "heron", "gull", "gulls", "otter", "otters"
+    ],
+    "farm": [
+      "farm", "sheep", "cow", "cows", "goat", "goats", "pig", "pigs", "chicken",
+      "chickens", "tractor", "barn", "barns", "grazing", "livestock", "calf", "calves"
+    ],
+    "pet": [
+      "pet", "pets", "dog", "dogs", "cat", "cats", "puppy", "puppies", "kitten", "kittens"
+    ],
+    "people": [
+      "people", "person", "portrait", "group", "crowd", "musician", "musicians",
+      "performer", "performers", "judge", "judges", "police", "officer", "officers",
+      "worker", "workers", "vendor", "vendors", "tourist", "tourists", "child",
+      "children", "couple", "man", "woman", "women", "men", "family", "families"
+    ],
+    "rural": [
+      "rural", "field", "fields", "farmland", "farm", "tractor", "barn", "barns",
+      "hedgerow", "country", "countryside", "pasture"
+    ],
+    "atmosphere": [
+      "weather", "mist", "misty", "fog", "foggy", "storm", "stormy", "sunset", "sunrise",
+      "dramatic", "rain", "rainy", "frost", "cloud", "clouds", "sky", "moody", "gloom",
+      "golden", "dusk", "dawn", "atmospheric", "light"
+    ],
+    "nature_detail": [
+      "flower", "flowers", "plant", "plants", "leaf", "leaves", "foliage", "macro",
+      "texture", "detail", "bark", "fungi", "mushroom", "mushrooms", "garden"
+    ],
+    "landscape": [
+      "landscape", "coast", "coastal", "beach", "shoreline", "woodland", "forest",
+      "countryside", "scenic", "hill", "hills", "valley", "cliff", "moor"
+    ],
+    "place_travel": [
+      "travel", "village", "town", "street", "architecture", "building", "historic",
+      "city", "market", "place", "urban", "square", "plaza", "church", "cathedral"
+    ]
+  },
+  "thresholds": {
+    "farm_exact_bonus": 6,
+    "farm_keyword_bonus_multiplier": 2,
+    "farm_single_keyword_bonus": 1,
+    "pet_soften_farm_by": 2,
+    "pet_soften_wildlife_by": 2,
+    "pet_people_bonus": 1,
+    "indoor_transport_place_penalty": 4,
+    "indoor_transport_uncertain_bonus": 3,
+    "abstract_nature_bonus": 2,
+    "abstract_place_penalty": 2,
+    "farm_cap_without_strong_evidence": 2,
+    "atmosphere_theme_bonus": 6,
+    "atmosphere_hits_bonus_threshold": 2,
+    "atmosphere_hits_bonus": 2,
+    "travel_bonus_threshold": 2,
+    "travel_bonus_amount": 2,
+    "wildlife_farm_conflict_threshold": 4,
+    "people_place_conflict_threshold": 4,
+    "atmosphere_conflict_threshold": 6,
+    "atmosphere_conflict_max_gap": 2,
+    "people_override_min": 5,
+    "weather_override_min": 6,
+    "wildlife_override_min": 5,
+    "nature_override_floor": 4,
+    "farm_override_min": 6,
+    "farm_override_wildlife_gap": 1,
+    "indoor_override_min": 5,
+    "travel_waterside_override_min": 5,
+    "travel_landscape_override_min": 6,
+    "place_to_landscape_fallback_min": 6,
+    "low_evidence_primary_max": 3,
+    "confidence_high_score": 10,
+    "confidence_high_gap": 4,
+    "confidence_mid_score": 8,
+    "confidence_mid_gap": 3,
+    "confidence_low_score": 6,
+    "confidence_low_gap": 2,
+    "confidence_floor_score": 4,
+    "uncertain_confidence_cap": 0.45
+  }
+}
