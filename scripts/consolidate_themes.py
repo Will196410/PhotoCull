@@ -387,22 +387,23 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
+    # Hard preference for atmosphere-led annual themes.
+    if raw_theme in atmosphere_theme_names:
+        primary = "Weather, Light, and Atmosphere"
+        top_score = evidence["Weather, Light, and Atmosphere"]
+    
     if evidence["People and Human Presence"] >= 5 and evidence["People and Human Presence"] >= top_score - 1:
         primary = "People and Human Presence"
         top_score = evidence[primary]
-
-    if raw_theme in atmosphere_theme_names:
-        if evidence["Weather, Light, and Atmosphere"] >= max(
-            evidence["Landscape"],
-            evidence["Waterside and Harbour"],
-            evidence["Rural Life and Working Country"],
-        ) - 1:
+#
+    if raw_theme not in atmosphere_theme_names:
+        if (
+            evidence["Weather, Light, and Atmosphere"] >= 6
+            and evidence["Weather, Light, and Atmosphere"] >= top_score - 1
+        ):
             primary = "Weather, Light, and Atmosphere"
             top_score = evidence[primary]
-    elif evidence["Weather, Light, and Atmosphere"] >= 6 and evidence["Weather, Light, and Atmosphere"] >= top_score - 1:
-        primary = "Weather, Light, and Atmosphere"
-        top_score = evidence[primary]
-
+#
     if evidence["Wildlife"] >= 5 and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
         top_score = evidence[primary]
