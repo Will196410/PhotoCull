@@ -187,7 +187,7 @@ def infer_category_from_prompt(prompt: str) -> str:
         return "Other / Uncertain"
     if any(word in tokens for word in {"coastal", "countryside", "woodland", "forest", "beach", "shoreline", "landscape"}):
         return "Landscape"
-    if any(word in tokens for word in {"tree"}):
+    if "tree" in tokens:
         return "Nature Detail"
     if "abstract visual pattern" in label:
         return "Nature Detail"
@@ -199,7 +199,6 @@ def build_exact_primary_map(theme_prompts: List[str]) -> dict:
     for prompt in theme_prompts:
         mapping[normalize_text(prompt)] = infer_category_from_prompt(prompt)
 
-    # Backward compatibility for older annual outputs.
     mapping.update({
         "travel snapshot of a place": "Place and Travel",
         "sky, cloud, or weather": "Weather, Light, and Atmosphere",
@@ -211,8 +210,7 @@ def build_atmosphere_theme_names(theme_prompts: List[str]) -> set:
     names = set()
     for prompt in theme_prompts:
         label = normalize_text(prompt)
-        category = infer_category_from_prompt(prompt)
-        if category == "Weather, Light, and Atmosphere":
+        if infer_category_from_prompt(prompt) == "Weather, Light, and Atmosphere":
             names.add(label)
     names.add("sky, cloud, or weather")
     return names
@@ -387,15 +385,14 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
-    # Hard preference for atmosphere-led annual themes.
     if raw_theme in atmosphere_theme_names:
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence["Weather, Light, and Atmosphere"]
-    
+
     if evidence["People and Human Presence"] >= 5 and evidence["People and Human Presence"] >= top_score - 1:
         primary = "People and Human Presence"
         top_score = evidence[primary]
-#
+
     if raw_theme not in atmosphere_theme_names:
         if (
             evidence["Weather, Light, and Atmosphere"] >= 6
@@ -403,7 +400,7 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         ):
             primary = "Weather, Light, and Atmosphere"
             top_score = evidence[primary]
-#
+
     if evidence["Wildlife"] >= 5 and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
         top_score = evidence[primary]
@@ -681,6 +678,11 @@ def main():
         default="",
         help="Optional comma-separated list of years to process, e.g. 2008,2010,2015",
     )
+    parser.add_argument(
+        "--prompts-file",
+        default=str(DEFAULT_PROMPTS_FILE),
+        help="Text file containing one theme prompt per line",
+    )
     parser.add_argument("--include-html", action="store_true", help="Build master_gallery.html")
     parser.add_argument("--strict", action="store_true", help="Fail if a year folder is missing required files")
     args = parser.parse_args()
@@ -708,6 +710,11 @@ def main():
     if not year_dirs:
         raise RuntimeError(f"No year folders found under {theme_output_root}")
 
+    prompts_file = Path(args.prompts_file).expanduser().resolve() if args.prompts_file else None
+    theme_prompts = load_theme_prompts(prompts_file)
+    exact_primary_map = build_exact_primary_map(theme_prompts)
+    atmosphere_theme_names = build_atmosphere_theme_names(theme_prompts)
+
     print(f"Reading annual outputs from {theme_output_root}")
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -730,7 +737,11 @@ def main():
     evidence_json = []
 
     for _, row in combined.iterrows():
-        primary, confidence, flags, evidence = map_primary_category(row)
+        primary, confidence, flags, evidence = map_primary_category(
+            row,
+            exact_primary_map,
+            atmosphere_theme_names,
+        )
         secondary = derive_secondary_categories(primary, row, evidence)
         primary_categories.append(primary)
         secondary_categories.append(", ".join(secondary))
