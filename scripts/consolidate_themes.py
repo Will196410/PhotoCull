@@ -418,6 +418,20 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
         primary = "Farm Animals"
         top_score = evidence[primary]
 
+    if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
+        if (
+            evidence["Landscape"] >= 5
+            and evidence["Landscape"] >= evidence["Place and Travel"] - 1
+        ):
+            primary = "Landscape"
+            top_score = evidence["Landscape"]
+        elif (
+            evidence["Waterside and Harbour"] >= 5
+            and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
+        ):
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+    
     if primary == "Place and Travel" and evidence["Landscape"] >= 5:
         primary = "Landscape"
         top_score = evidence[primary]
