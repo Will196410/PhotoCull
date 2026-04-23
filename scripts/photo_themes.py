@@ -34,8 +34,13 @@ THEME_PROMPTS = [
     "a pet photograph",
     "an old building or historic architecture photograph",
     "a village, town, or street scene photograph",
-    "a travel snapshot of a place",
-    "a sky, cloud, or weather photograph",
+    "a travel photograph showing a place",
+    "a dramatic sky photograph",
+    "a sunset or sunrise photograph",
+    "a misty or foggy landscape photograph",
+    "a stormy weather photograph",
+    "a moody atmospheric landscape photograph",
+    "a photograph where light and weather create the mood",
     "a macro or texture detail photograph",
     "a waterside or river scene",
     "a beach or shoreline photograph",
@@ -220,7 +225,7 @@ def build_display_theme_name(top_labels, dominant_folder, cluster_id):
     secondary = clean_prompt_label(top_labels[1])
 
     weak_seconds = {
-        "travel snapshot of a place",
+        "travel photograph showing a place",
         "village, town, or street",
         "indoor",
     }
