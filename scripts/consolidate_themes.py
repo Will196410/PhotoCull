@@ -420,19 +420,19 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
 
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if (
-            evidence["Landscape"] >= 5
-            and evidence["Landscape"] >= evidence["Place and Travel"] - 1
-        ):
-            primary = "Landscape"
-            top_score = evidence["Landscape"]
-        elif (
             evidence["Waterside and Harbour"] >= 5
             and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
         ):
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
-    
-    if primary == "Place and Travel" and evidence["Landscape"] >= 5:
+        elif (
+            evidence["Landscape"] >= 6
+            and evidence["Landscape"] >= evidence["Place and Travel"] - 1
+        ):
+            primary = "Landscape"
+            top_score = evidence["Landscape"]
+
+    if primary == "Place and Travel" and evidence["Landscape"] >= 6:
         primary = "Landscape"
         top_score = evidence[primary]
 
@@ -463,6 +463,9 @@ def map_primary_category(row: pd.Series, exact_primary_map: dict, atmosphere_the
             primary = "Other / Uncertain"
             confidence = 0.45
             review_flags.append("reassigned_from_nature_detail_low_confidence")
+
+    if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"} and confidence < 0.7:
+        review_flags.append("generic_travel_theme_low_confidence")
 
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
@@ -613,14 +616,14 @@ def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master
             <div id="toast" class="toast"></div>
         </div>
         <script>
-        async function copyText(text) {{
-            try {{
-                if (navigator.clipboard && window.isSecureContext) {{
+        async function copyText(text) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(text);
                     return true;
-                }}
-            }} catch (e) {{}}
-            try {{
+                }
+            } catch (e) {}
+            try {
                 const ta = document.createElement('textarea');
                 ta.value = text;
                 ta.setAttribute('readonly', '');
@@ -633,21 +636,21 @@ def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master
                 const ok = document.execCommand('copy');
                 document.body.removeChild(ta);
                 return ok;
-            }} catch (e) {{
+            } catch (e) {
                 return false;
-            }}
-        }}
-        function showToast(message) {{
+            }
+        }
+        function showToast(message) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.classList.add('show');
             clearTimeout(window.__toastTimer);
             window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
-        }}
-        async function copyPath(path) {{
+        }
+        async function copyPath(path) {
             const ok = await copyText(path);
             showToast(ok ? 'Copied path' : 'Could not copy path');
-        }}
+        }
         </script>
     </body>
     </html>
