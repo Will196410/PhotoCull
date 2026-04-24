@@ -437,7 +437,7 @@ def map_primary_category(
     if raw_theme == "macro or texture detail" and farm_hits < 2:
         evidence["Farm Animals"] = 0
 
-    farm_theme_exact = (raw_theme == "farm animal")
+    farm_theme_exact = raw_theme == "farm animal"
     strong_farm_evidence = farm_hits >= 2
     if not farm_theme_exact and not strong_farm_evidence:
         evidence["Farm Animals"] = min(
@@ -518,12 +518,13 @@ def map_primary_category(
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence["Weather, Light, and Atmosphere"]
 
-    if (
-        evidence["People and Human Presence"] >= t["people_override_min"]
-        and evidence["People and Human Presence"] >= top_score - 1
-    ):
-        primary = "People and Human Presence"
-        top_score = evidence["People and Human Presence"]
+    if raw_theme != "indoor":
+        if (
+            evidence["People and Human Presence"] >= t["people_override_min"]
+            and evidence["People and Human Presence"] >= top_score - 1
+        ):
+            primary = "People and Human Presence"
+            top_score = evidence["People and Human Presence"]
 
     if raw_theme not in atmosphere_theme_names:
         if (
@@ -550,58 +551,66 @@ def map_primary_category(
         primary = "Farm Animals"
         top_score = evidence["Farm Animals"]
 
+    # ------------------------------------------------------------------------
+    # INDOOR CONSERVATIVE OVERRIDES
+    # ------------------------------------------------------------------------
     if raw_theme == "indoor":
-        if (
-            "people or group" in top_labels
-            and evidence["People and Human Presence"] >= 4
-        ):
+        has_portrait_label = "portrait of one person" in top_labels
+        has_people_group_label = "people or group" in top_labels
+        has_architecture_label = "old building or historic architecture" in top_labels
+        has_waterside_label = "waterside or river" in top_labels
+        has_weather_mood_label = (
+            "photograph where light and weather create the mood" in top_labels
+            or "light and weather create the mood" in full_text
+        )
+
+        strong_portrait_support = (
+            has_portrait_label
+            and evidence["People and Human Presence"] >= 6
+            and people_hits >= 1
+        )
+
+        strong_people_group_support = (
+            has_people_group_label
+            and evidence["People and Human Presence"] >= 8
+            and people_hits >= 2
+        )
+
+        strong_architecture_support = (
+            has_architecture_label
+            and evidence["Place and Travel"] >= 7
+            and place_hits >= 2
+        )
+
+        strong_waterside_support = (
+            has_waterside_label
+            and evidence["Waterside and Harbour"] >= 8
+            and waterside_hits >= 2
+        )
+
+        strong_weather_mood_support = (
+            has_weather_mood_label
+            and evidence["Weather, Light, and Atmosphere"] >= 9
+            and atmosphere_hits >= 3
+        )
+
+        if strong_portrait_support or strong_people_group_support:
             primary = "People and Human Presence"
             top_score = evidence["People and Human Presence"]
-        elif (
-            "portrait of one person" in top_labels
-            and evidence["People and Human Presence"] >= 4
-        ):
-            primary = "People and Human Presence"
-            top_score = evidence["People and Human Presence"]
-        elif (
-            (
-                "photograph where light and weather create the mood" in top_labels
-                or "light and weather create the mood" in full_text
-            )
-            and evidence["Weather, Light, and Atmosphere"] >= 4
-        ):
+        elif strong_architecture_support:
+            primary = "Place and Travel"
+            top_score = evidence["Place and Travel"]
+        elif strong_waterside_support:
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+        elif strong_weather_mood_support:
             primary = "Weather, Light, and Atmosphere"
             top_score = evidence["Weather, Light, and Atmosphere"]
-        elif (
-            "old building or historic architecture" in top_labels
-            and evidence["Place and Travel"] >= 4
-        ):
-            primary = "Place and Travel"
-            top_score = evidence["Place and Travel"]
-        elif (
-            "waterside or river" in top_labels
-            and evidence["Waterside and Harbour"] >= 4
-        ):
-            primary = "Waterside and Harbour"
-            top_score = evidence["Waterside and Harbour"]
-        elif (
-            evidence["People and Human Presence"] >= t["indoor_override_min"]
-            and evidence["People and Human Presence"] >= top_score - 1
-        ):
-            primary = "People and Human Presence"
-            top_score = evidence["People and Human Presence"]
-        elif (
-            evidence["Place and Travel"] >= t["indoor_override_min"]
-            and evidence["Place and Travel"] >= top_score - 1
-        ):
-            primary = "Place and Travel"
-            top_score = evidence["Place and Travel"]
-        elif (
-            evidence["Waterside and Harbour"] >= t["indoor_override_min"]
-            and evidence["Waterside and Harbour"] >= top_score - 1
-        ):
-            primary = "Waterside and Harbour"
-            top_score = evidence["Waterside and Harbour"]
+        else:
+            # Plain indoor scenes should not inherit weak secondary labels.
+            primary = "Other / Uncertain"
+            top_score = evidence["Other / Uncertain"]
+            review_flags.append("indoor_conservative_fallback")
 
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if (
@@ -624,6 +633,48 @@ def map_primary_category(
     ):
         primary = "Landscape"
         top_score = evidence["Landscape"]
+
+    # ------------------------------------------------------------------------
+    # POST-INDOOR SAFETY NET
+    # ------------------------------------------------------------------------
+    if raw_theme == "indoor":
+        if primary == "People and Human Presence":
+            if not (
+                ("portrait of one person" in top_labels and people_hits >= 1 and evidence["People and Human Presence"] >= 6)
+                or ("people or group" in top_labels and people_hits >= 2 and evidence["People and Human Presence"] >= 8)
+            ):
+                primary = "Other / Uncertain"
+                top_score = evidence["Other / Uncertain"]
+                review_flags.append("indoor_people_downgraded_weak_support")
+
+        elif primary == "Waterside and Harbour":
+            if not (
+                "waterside or river" in top_labels
+                and waterside_hits >= 2
+                and evidence["Waterside and Harbour"] >= 8
+            ):
+                primary = "Other / Uncertain"
+                top_score = evidence["Other / Uncertain"]
+                review_flags.append("indoor_waterside_downgraded_weak_support")
+
+        elif primary == "Weather, Light, and Atmosphere":
+            if not (
+                atmosphere_hits >= 3
+                and evidence["Weather, Light, and Atmosphere"] >= 9
+            ):
+                primary = "Other / Uncertain"
+                top_score = evidence["Other / Uncertain"]
+                review_flags.append("indoor_weather_downgraded_weak_support")
+
+        elif primary == "Place and Travel":
+            if not (
+                "old building or historic architecture" in top_labels
+                and place_hits >= 2
+                and evidence["Place and Travel"] >= 7
+            ):
+                primary = "Other / Uncertain"
+                top_score = evidence["Other / Uncertain"]
+                review_flags.append("indoor_place_downgraded_weak_support")
 
     # ------------------------------------------------------------------------
     # WEAK-EVIDENCE FALLBACK
@@ -673,6 +724,9 @@ def map_primary_category(
     # ------------------------------------------------------------------------
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"} and confidence < 0.7:
         review_flags.append("generic_travel_theme_low_confidence")
+
+    if raw_theme == "indoor" and primary == "Other / Uncertain":
+        review_flags.append("indoor_low_confidence_or_generic")
 
     if confidence < 0.7:
         review_flags.append("low_mapping_confidence")
