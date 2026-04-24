@@ -719,6 +719,62 @@ def map_primary_category(
             confidence = t["uncertain_confidence_cap"]
             review_flags.append("reassigned_from_nature_detail_low_confidence")
 
+        # ------------------------------------------------------------------------
+    # FINAL INDOOR HARD SAFETY NET
+    # ------------------------------------------------------------------------
+    if raw_theme == "indoor":
+        has_portrait_label = "portrait of one person" in top_labels
+        has_people_group_label = "people or group" in top_labels
+        has_architecture_label = "old building or historic architecture" in top_labels
+        has_waterside_label = "waterside or river" in top_labels
+        has_weather_mood_label = (
+            "photograph where light and weather create the mood" in top_labels
+            or "light and weather create the mood" in full_text
+        )
+
+        indoor_people_ok = (
+            (has_portrait_label and people_hits >= 1 and evidence["People and Human Presence"] >= 6)
+            or (has_people_group_label and people_hits >= 2 and evidence["People and Human Presence"] >= 8)
+        )
+
+        indoor_place_ok = (
+            has_architecture_label
+            and place_hits >= 2
+            and evidence["Place and Travel"] >= 7
+        )
+
+        indoor_waterside_ok = (
+            has_waterside_label
+            and waterside_hits >= 2
+            and evidence["Waterside and Harbour"] >= 8
+        )
+
+        indoor_weather_ok = (
+            has_weather_mood_label
+            and atmosphere_hits >= 3
+            and evidence["Weather, Light, and Atmosphere"] >= 9
+        )
+
+        if primary == "People and Human Presence" and not indoor_people_ok:
+            primary = "Other / Uncertain"
+            confidence = t["uncertain_confidence_cap"]
+            review_flags.append("final_indoor_people_downgraded")
+
+        elif primary == "Place and Travel" and not indoor_place_ok:
+            primary = "Other / Uncertain"
+            confidence = t["uncertain_confidence_cap"]
+            review_flags.append("final_indoor_place_downgraded")
+
+        elif primary == "Waterside and Harbour" and not indoor_waterside_ok:
+            primary = "Other / Uncertain"
+            confidence = t["uncertain_confidence_cap"]
+            review_flags.append("final_indoor_waterside_downgraded")
+
+        elif primary == "Weather, Light, and Atmosphere" and not indoor_weather_ok:
+            primary = "Other / Uncertain"
+            confidence = t["uncertain_confidence_cap"]
+            review_flags.append("final_indoor_weather_downgraded")
+            
     # ------------------------------------------------------------------------
     # FINAL REVIEW FLAGS
     # ------------------------------------------------------------------------
