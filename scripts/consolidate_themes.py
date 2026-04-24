@@ -977,7 +977,7 @@ def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
             if "waterside or river" not in top_labels:
                 reasons.append("indoor_assigned_waterside_without_waterside_label")
 
-        f is_indoor and primary == "Weather, Light, and Atmosphere":
+        if is_indoor and primary == "Weather, Light, and Atmosphere":
             weather_support_labels = {
                 "photograph where light and weather create the mood",
                 "light and weather create the mood",
