@@ -445,9 +445,13 @@ def map_primary_category(
         )
 
     if raw_theme in atmosphere_theme_names:
-        evidence["Weather, Light, and Atmosphere"] += t["atmosphere_theme_bonus"]
-    if atmosphere_hits >= t["atmosphere_hits_bonus_threshold"]:
-        evidence["Weather, Light, and Atmosphere"] += t["atmosphere_hits_bonus"]
+        if landscape_hits >= 2 or waterside_hits >= 2:
+            evidence["Weather, Light, and Atmosphere"] += 3
+        else:
+            evidence["Weather, Light, and Atmosphere"] += 5
+
+    if atmosphere_hits >= 3:
+        evidence["Weather, Light, and Atmosphere"] += 2
 
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if landscape_hits >= t["travel_bonus_threshold"]:
@@ -973,8 +977,17 @@ def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
             if "waterside or river" not in top_labels:
                 reasons.append("indoor_assigned_waterside_without_waterside_label")
 
-        if is_indoor and primary == "Weather, Light, and Atmosphere":
-            if "photograph where light and weather create the mood" not in top_labels:
+        f is_indoor and primary == "Weather, Light, and Atmosphere":
+            weather_support_labels = {
+                "photograph where light and weather create the mood",
+                "light and weather create the mood",
+                "moody atmospheric landscape",
+                "stormy weather",
+                "dramatic sky",
+                "sunset or sunrise",
+                "misty or foggy landscape",
+            }
+            if not (top_labels & weather_support_labels):
                 reasons.append("indoor_assigned_weather_without_weather_mood_label")
 
         if is_indoor and primary == "Place and Travel":
