@@ -844,6 +844,175 @@ def build_category_summary(df: pd.DataFrame) -> pd.DataFrame:
         })
     return pd.DataFrame(rows).sort_values(["image_count", "master_category"], ascending=[False, True])
 
+# ============================================================================
+# MAPPING DIAGNOSTICS
+# ============================================================================
+
+def add_diagnostic_columns(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+
+    out["_raw_theme_norm"] = out.get("theme_name", "").apply(normalize_text)
+    out["_display_theme_norm"] = out.get("display_theme_name", "").apply(normalize_text)
+    out["_top_label_1_norm"] = out.get("theme_top_label_1", "").apply(normalize_text)
+    out["_top_label_2_norm"] = out.get("theme_top_label_2", "").apply(normalize_text)
+    out["_top_label_3_norm"] = out.get("theme_top_label_3", "").apply(normalize_text)
+
+    return out
+
+
+def build_mapping_diagnostics(df: pd.DataFrame) -> pd.DataFrame:
+    diag = add_diagnostic_columns(df)
+
+    group_cols = [
+        "_raw_theme_norm",
+        "_top_label_1_norm",
+        "_top_label_2_norm",
+        "_top_label_3_norm",
+        "primary_master_category",
+    ]
+
+    rows = []
+    for keys, group in diag.groupby(group_cols, dropna=False):
+        raw_theme, top1, top2, top3, primary = keys
+        examples = group["archive_relative_path"].fillna(group["path"]).head(8).tolist()
+        rows.append({
+            "raw_theme": raw_theme,
+            "top_label_1": top1,
+            "top_label_2": top2,
+            "top_label_3": top3,
+            "assigned_master_category": primary,
+            "image_count": len(group),
+            "avg_confidence": round(float(group["mapping_confidence"].mean()), 3),
+            "min_confidence": round(float(group["mapping_confidence"].min()), 3),
+            "max_confidence": round(float(group["mapping_confidence"].max()), 3),
+            "review_flag_count": int(group["review_flags"].fillna("").astype(str).str.len().gt(0).sum()),
+            "example_images": json.dumps(examples, ensure_ascii=False),
+        })
+
+    return pd.DataFrame(rows).sort_values(
+        ["image_count", "raw_theme", "assigned_master_category"],
+        ascending=[False, True, True],
+    )
+
+
+def build_category_theme_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    diag = add_diagnostic_columns(df)
+
+    matrix = pd.pivot_table(
+        diag,
+        index="_raw_theme_norm",
+        columns="primary_master_category",
+        values="file",
+        aggfunc="count",
+        fill_value=0,
+    ).reset_index()
+
+    matrix = matrix.rename(columns={"_raw_theme_norm": "raw_theme"})
+
+    ordered = ["raw_theme"] + [c for c in MASTER_CATEGORIES if c in matrix.columns]
+    extras = [c for c in matrix.columns if c not in ordered]
+    matrix = matrix[ordered + extras]
+
+    matrix["total"] = matrix[[c for c in matrix.columns if c != "raw_theme"]].sum(axis=1)
+    return matrix.sort_values("total", ascending=False)
+
+
+def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
+    diag = add_diagnostic_columns(df)
+    rows = []
+
+    for _, row in diag.iterrows():
+        raw_theme = row.get("_raw_theme_norm", "")
+        display_theme = row.get("_display_theme_norm", "")
+        top1 = row.get("_top_label_1_norm", "")
+        top2 = row.get("_top_label_2_norm", "")
+        top3 = row.get("_top_label_3_norm", "")
+        top_labels = {top1, top2, top3}
+        primary = row.get("primary_master_category", "")
+        confidence = float(row.get("mapping_confidence", 0) or 0)
+
+        reasons = []
+
+        is_indoor = raw_theme == "indoor" or display_theme.startswith("indoor")
+        is_generic_travel = raw_theme in {
+            "travel snapshot of a place",
+            "travel photograph showing a place",
+            "travel showing place",
+        }
+
+        if is_indoor and primary == "People and Human Presence":
+            if "portrait of one person" not in top_labels and "people or group" not in top_labels:
+                reasons.append("indoor_assigned_people_without_people_or_portrait_label")
+
+        if is_indoor and primary == "Waterside and Harbour":
+            if "waterside or river" not in top_labels:
+                reasons.append("indoor_assigned_waterside_without_waterside_label")
+
+        if is_indoor and primary == "Weather, Light, and Atmosphere":
+            if "photograph where light and weather create the mood" not in top_labels:
+                reasons.append("indoor_assigned_weather_without_weather_mood_label")
+
+        if is_indoor and primary == "Place and Travel":
+            if "old building or historic architecture" not in top_labels:
+                reasons.append("indoor_assigned_place_without_architecture_label")
+
+        if raw_theme == "stormy weather" and primary == "Wildlife":
+            reasons.append("stormy_weather_assigned_wildlife")
+
+        if raw_theme == "waterside or river" and primary == "Weather, Light, and Atmosphere":
+            reasons.append("waterside_assigned_weather")
+
+        if is_generic_travel and confidence < 0.7:
+            reasons.append("generic_travel_low_confidence")
+
+        if confidence < 0.7 and primary != "Other / Uncertain":
+            reasons.append("low_confidence_non_uncertain_assignment")
+
+        if reasons:
+            rows.append({
+                "year": row.get("year", ""),
+                "file": row.get("file", ""),
+                "path": row.get("path", ""),
+                "archive_relative_path": row.get("archive_relative_path", ""),
+                "display_theme_name": row.get("display_theme_name", ""),
+                "theme_name": row.get("theme_name", ""),
+                "top_label_1": row.get("theme_top_label_1", ""),
+                "top_label_2": row.get("theme_top_label_2", ""),
+                "top_label_3": row.get("theme_top_label_3", ""),
+                "assigned_master_category": primary,
+                "mapping_confidence": confidence,
+                "suspicion_reasons": ", ".join(reasons),
+                "review_flags": row.get("review_flags", ""),
+                "mapping_evidence": row.get("mapping_evidence", ""),
+            })
+
+    if not rows:
+        return pd.DataFrame(columns=[
+            "year", "file", "path", "archive_relative_path", "display_theme_name",
+            "theme_name", "top_label_1", "top_label_2", "top_label_3",
+            "assigned_master_category", "mapping_confidence",
+            "suspicion_reasons", "review_flags", "mapping_evidence"
+        ])
+
+    return pd.DataFrame(rows).sort_values(
+        ["suspicion_reasons", "assigned_master_category", "year", "file"],
+        na_position="last",
+    )
+
+
+def print_suspicious_summary(suspicious_df: pd.DataFrame) -> None:
+    if suspicious_df.empty:
+        print("Suspicious mappings:       none found")
+        return
+
+    reason_counts = Counter()
+    for value in suspicious_df["suspicion_reasons"].fillna(""):
+        for reason in [r.strip() for r in str(value).split(",") if r.strip()]:
+            reason_counts[reason] += 1
+
+    print("Suspicious mappings:")
+    for reason, count in reason_counts.most_common(12):
+        print(f"  - {reason}: {count}")
 
 def build_html_gallery(df: pd.DataFrame, output_path: Path, title: str = "Master Gallery") -> None:
     grouped = defaultdict(list)
@@ -1158,7 +1327,20 @@ def main():
     flags_df = flags_df[flags_columns].sort_values(["year", "primary_master_category", "file"], na_position="last")
     flags_csv = output_root / "master_gallery_review_flags.csv"
     flags_df.to_csv(flags_csv, index=False)
+    # ------------------------------------------------------------------------
+    # DIAGNOSTIC OUTPUTS FOR TUNING
+    # ------------------------------------------------------------------------
+    diagnostics_df = build_mapping_diagnostics(combined)
+    diagnostics_csv = output_root / "master_gallery_mapping_diagnostics.csv"
+    diagnostics_df.to_csv(diagnostics_csv, index=False)
 
+    suspicious_df = build_suspicious_mappings(combined)
+    suspicious_csv = output_root / "master_gallery_suspicious_mappings.csv"
+    suspicious_df.to_csv(suspicious_csv, index=False)
+
+    matrix_df = build_category_theme_matrix(combined)
+    matrix_csv = output_root / "master_gallery_category_theme_matrix.csv"
+    matrix_df.to_csv(matrix_csv, index=False)
     if args.include_html:
         html_path = output_root / "master_gallery.html"
         build_html_gallery(combined, html_path)
@@ -1169,6 +1351,10 @@ def main():
     print(f"Master images CSV:         {images_csv}")
     print(f"Master categories CSV:     {categories_csv}")
     print(f"Review flags CSV:          {flags_csv}")
+    print(f"Mapping diagnostics CSV:   {diagnostics_csv}")
+    print(f"Suspicious mappings CSV:   {suspicious_csv}")
+    print(f"Category/theme matrix CSV: {matrix_csv}")
+    print_suspicious_summary(suspicious_df)
     print(f"Total images consolidated: {len(combined)}")
     print(f"Categories present:        {combined['primary_master_category'].nunique()}")
 
