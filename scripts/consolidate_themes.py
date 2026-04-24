@@ -550,6 +550,15 @@ def map_primary_category(
         primary = "Wildlife"
         top_score = evidence["Wildlife"]
 
+    # ------------------------------------------------------------------------
+    # STORMY WEATHER PROTECTION
+    # ------------------------------------------------------------------------
+    if raw_theme == "stormy weather":
+        if evidence["Weather, Light, and Atmosphere"] >= evidence["Wildlife"] - 1:
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
+            review_flags.append("stormy_weather_protected_from_wildlife")
+
     if raw_theme != "farm animal":
         if evidence["Nature Detail"] >= max(evidence["Farm Animals"] - 1, t["nature_override_floor"]):
             if evidence["Nature Detail"] >= top_score - 1:
@@ -563,6 +572,24 @@ def map_primary_category(
         primary = "Farm Animals"
         top_score = evidence["Farm Animals"]
 
+    # ------------------------------------------------------------------------
+    # WATERSIDE PROTECTION AGAINST WEATHER BLEED
+    # ------------------------------------------------------------------------
+    if raw_theme == "waterside or river":
+        if evidence["Waterside and Harbour"] >= evidence["Weather, Light, and Atmosphere"] - 2:
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+            review_flags.append("waterside_protected_from_weather")
+
+    # ------------------------------------------------------------------------
+    # STORMY WEATHER PROTECTION AGAINST WILDLIFE BLEED
+    # ------------------------------------------------------------------------
+    if raw_theme == "stormy weather":
+        if evidence["Weather, Light, and Atmosphere"] >= evidence["Wildlife"] - 1:
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
+            review_flags.append("stormy_weather_protected_from_wildlife")
+    
     # ------------------------------------------------------------------------
     # INDOOR CONSERVATIVE OVERRIDES
     # ------------------------------------------------------------------------
