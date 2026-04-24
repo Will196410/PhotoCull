@@ -972,6 +972,35 @@ def build_category_theme_matrix(df: pd.DataFrame) -> pd.DataFrame:
     matrix["total"] = matrix[[c for c in matrix.columns if c != "raw_theme"]].sum(axis=1)
     return matrix.sort_values("total", ascending=False)
 
+def build_audit_sample(df: pd.DataFrame, per_category: int = 50) -> pd.DataFrame:
+    parts = []
+    for category in MASTER_CATEGORIES:
+        group = df[df["primary_master_category"] == category].copy()
+        if group.empty:
+            continue
+        group = group.sort_values(
+            ["mapping_confidence", "display_theme_name", "relative_path"],
+            ascending=[True, True, True],
+            na_position="last",
+        ).head(per_category)
+        parts.append(group)
+
+    if not parts:
+        return pd.DataFrame()
+
+    audit = pd.concat(parts, ignore_index=True)
+    cols = [
+        "primary_master_category",
+        "year",
+        "file",
+        "path",
+        "archive_relative_path",
+        "display_theme_name",
+        "mapping_confidence",
+        "review_flags",
+        "mapping_evidence",
+    ]
+    return audit[[c for c in cols if c in audit.columns]]
 
 def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
     diag = add_diagnostic_columns(df)
@@ -1416,6 +1445,10 @@ def main():
         build_html_gallery(combined, html_path)
         print(f"HTML gallery:              {html_path}")
 
+    audit_df = build_audit_sample(combined, per_category=50)
+    audit_csv = output_root / "master_gallery_audit_sample.csv"
+    audit_df.to_csv(audit_csv, index=False)
+    
     print()
     print("Done.")
     print(f"Master images CSV:         {images_csv}")
@@ -1427,6 +1460,7 @@ def main():
     print_suspicious_summary(suspicious_df)
     print(f"Total images consolidated: {len(combined)}")
     print(f"Categories present:        {combined['primary_master_category'].nunique()}")
+    print(f"Audit sample CSV:          {audit_csv}")
 
 
 if __name__ == "__main__":
