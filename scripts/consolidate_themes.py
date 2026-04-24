@@ -719,10 +719,10 @@ def map_primary_category(
             confidence = t["uncertain_confidence_cap"]
             review_flags.append("reassigned_from_nature_detail_low_confidence")
 
-        # ------------------------------------------------------------------------
+    # ------------------------------------------------------------------------
     # FINAL INDOOR HARD SAFETY NET
     # ------------------------------------------------------------------------
-    if raw_theme == "indoor":
+    if raw_theme == "indoor" or str(row.get("display_theme_name", "")).lower().startswith("indoor"):
         has_portrait_label = "portrait of one person" in top_labels
         has_people_group_label = "people or group" in top_labels
         has_architecture_label = "old building or historic architecture" in top_labels
