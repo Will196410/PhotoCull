@@ -512,6 +512,14 @@ def map_primary_category(
     second_score = ranked[1][1] if len(ranked) > 1 else 0
 
     # ------------------------------------------------------------------------
+    # STORMY WEATHER PROTECTION
+    # ------------------------------------------------------------------------
+    if raw_theme == "stormy weather":
+        if evidence["Weather, Light, and Atmosphere"] >= evidence["Wildlife"] - 1:
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
+            
+    # ------------------------------------------------------------------------
     # DECISION-STAGE OVERRIDES
     # ------------------------------------------------------------------------
     if raw_theme in atmosphere_theme_names:
@@ -677,6 +685,14 @@ def map_primary_category(
                 review_flags.append("indoor_place_downgraded_weak_support")
 
     # ------------------------------------------------------------------------
+    # WATERSIDE PROTECTION (ANTI-WEATHER BLEED)
+    # ------------------------------------------------------------------------
+    if raw_theme == "waterside or river":
+        if evidence["Waterside and Harbour"] >= evidence["Weather, Light, and Atmosphere"] - 2:
+            primary = "Waterside and Harbour"
+            top_score = evidence["Waterside and Harbour"]
+
+    # ------------------------------------------------------------------------
     # WEAK-EVIDENCE FALLBACK
     # ------------------------------------------------------------------------
     if top_score <= t["low_evidence_primary_max"]:
@@ -774,7 +790,16 @@ def map_primary_category(
             primary = "Other / Uncertain"
             confidence = t["uncertain_confidence_cap"]
             review_flags.append("final_indoor_weather_downgraded")
-            
+
+    # ------------------------------------------------------------------------
+    # INDOOR LOW-CONFIDENCE CLAMP
+    # ------------------------------------------------------------------------
+    if raw_theme == "indoor":
+        if confidence < 0.7 and primary != "Other / Uncertain":
+            primary = "Other / Uncertain"
+            confidence = t["uncertain_confidence_cap"]
+            review_flags.append("indoor_low_confidence_forced_uncertain")
+
     # ------------------------------------------------------------------------
     # FINAL REVIEW FLAGS
     # ------------------------------------------------------------------------
