@@ -1030,7 +1030,12 @@ def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
         if is_generic_travel and confidence < 0.7:
             reasons.append("generic_travel_low_confidence")
 
-        if confidence < 0.7 and primary != "Other / Uncertain":
+        protected_by_rule = any(flag in str(row.get("review_flags", "")) for flag in {
+            "waterside_protected_from_weather",
+            "stormy_weather_protected_from_wildlife",
+        })
+
+        if confidence < 0.7 and primary != "Other / Uncertain" and not protected_by_rule:
             reasons.append("low_confidence_non_uncertain_assignment")
 
         if reasons:
