@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple, Optional
 import pandas as pd
 
 # ============================================================================
-# CONSTANTS AND DEFAULTS
+# CONSTANTS AND DEFAULTS 
 # ============================================================================
 
 MASTER_CATEGORIES = [
