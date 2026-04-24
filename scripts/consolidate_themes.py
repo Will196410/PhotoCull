@@ -576,7 +576,7 @@ def map_primary_category(
     # WATERSIDE PROTECTION AGAINST WEATHER BLEED
     # ------------------------------------------------------------------------
     if raw_theme == "waterside or river":
-        if evidence["Waterside and Harbour"] >= evidence["Weather, Light, and Atmosphere"] - 2:
+        if evidence["Weather, Light, and Atmosphere"] <= evidence["Waterside and Harbour"] + 5:
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
             review_flags.append("waterside_protected_from_weather")
