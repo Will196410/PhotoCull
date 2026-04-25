@@ -915,6 +915,94 @@ def build_metrics(df: pd.DataFrame) -> dict:
         "uncertain_rate": round(uncertain_count / max(len(df), 1), 3),
     }
 
+def build_audit_html(df: pd.DataFrame, output_path: Path, per_category: int = 50) -> None:
+    blocks = []
+
+    for category in MASTER_CATEGORIES:
+        group = df[df["primary_master_category"] == category].copy()
+        if group.empty:
+            continue
+
+        group = group.sort_values(
+            ["mapping_confidence", "display_theme_name", "relative_path"],
+            ascending=[True, True, True],
+            na_position="last",
+        ).head(per_category)
+
+        cards = []
+        for _, row in group.iterrows():
+            year = html.escape(str(row.get("year", "")).strip())
+            thumb = html.escape(str(row.get("thumb", "")).strip())
+            thumb_src = f"../{year}/{thumb}" if year and thumb else ""
+
+            file_name = html.escape(str(row.get("file", "")))
+            rel_path = html.escape(str(row.get("archive_relative_path") or row.get("relative_path") or ""))
+            theme = html.escape(str(row.get("display_theme_name", "")))
+            confidence = html.escape(str(row.get("mapping_confidence", "")))
+            flags = html.escape(str(row.get("review_flags", "")))
+
+            img_html = (
+                f'<img src="{thumb_src}" alt="{file_name}" loading="lazy">'
+                if thumb_src
+                else '<div class="no-thumb">No thumbnail</div>'
+            )
+
+            cards.append(f"""
+            <div class="card">
+                <div class="thumb">{img_html}</div>
+                <div class="info">
+                    <div class="file">{file_name}</div>
+                    <div class="path">{rel_path}</div>
+                    <div class="theme">{theme}</div>
+                    <div class="meta">Confidence: {confidence}</div>
+                    <div class="flags">{flags or "—"}</div>
+                </div>
+            </div>
+            """)
+
+        blocks.append(f"""
+        <section class="category">
+            <h2>{html.escape(category)} <span>{len(group)} sampled</span></h2>
+            <div class="grid">
+                {''.join(cards)}
+            </div>
+        </section>
+        """)
+
+    page = f"""
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Master Gallery Audit</title>
+<style>
+body {{ margin:0; background:#111; color:#eee; font-family:system-ui,-apple-system,sans-serif; }}
+.wrap {{ max-width:1600px; margin:0 auto; padding:24px; }}
+h1 {{ margin:0 0 20px; }}
+h2 {{ margin:34px 0 12px; border-bottom:1px solid #444; padding-bottom:8px; }}
+h2 span {{ color:#aaa; font-size:14px; font-weight:400; }}
+.grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }}
+.card {{ background:#1f1f1f; border:1px solid #333; border-radius:10px; overflow:hidden; }}
+.thumb {{ aspect-ratio:1; background:#050505; display:flex; align-items:center; justify-content:center; }}
+.thumb img {{ width:100%; height:100%; object-fit:cover; display:block; }}
+.no-thumb {{ color:#888; font-size:13px; }}
+.info {{ padding:10px; font-size:12px; }}
+.file {{ font-weight:700; margin-bottom:4px; }}
+.path, .theme, .meta, .flags {{ color:#bbb; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:4px; }}
+.flags {{ color:#f0c36a; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Master Gallery Audit</h1>
+<p>Lowest-confidence samples first, up to {per_category} per category.</p>
+{''.join(blocks)}
+</div>
+</body>
+</html>
+"""
+    output_path.write_text(page, encoding="utf-8")
+
 # ============================================================================
 # MAPPING DIAGNOSTICS
 # ============================================================================
@@ -1468,6 +1556,9 @@ def main():
     metrics_json = output_root / "master_gallery_metrics.json"
     metrics_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
 
+    audit_html = output_root / "master_gallery_audit.html"
+    build_audit_html(combined, audit_html, per_category=50)
+    
     print()
     print("Done.")
     print(f"Master images CSV:         {images_csv}")
@@ -1481,6 +1572,7 @@ def main():
     print(f"Categories present:        {combined['primary_master_category'].nunique()}")
     print(f"Audit sample CSV:          {audit_csv}")
     print(f"Metrics JSON:              {metrics_json}")
+    print(f"Audit HTML:                {audit_html}")
     
 
 if __name__ == "__main__":
