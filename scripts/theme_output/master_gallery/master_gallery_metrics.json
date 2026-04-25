@@ -1,0 +1,18 @@
+{
+  "total_images": 2177,
+  "category_counts": {
+    "Weather, Light, and Atmosphere": 786,
+    "Waterside and Harbour": 405,
+    "Landscape": 308,
+    "Place and Travel": 263,
+    "Other / Uncertain": 253,
+    "Nature Detail": 100,
+    "People and Human Presence": 54,
+    "Wildlife": 8
+  },
+  "avg_confidence": 0.86,
+  "low_confidence_count": 497,
+  "low_confidence_rate": 0.228,
+  "uncertain_count": 253,
+  "uncertain_rate": 0.116
+}
