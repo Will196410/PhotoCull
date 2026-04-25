@@ -900,6 +900,21 @@ def build_category_summary(df: pd.DataFrame) -> pd.DataFrame:
         })
     return pd.DataFrame(rows).sort_values(["image_count", "master_category"], ascending=[False, True])
 
+def build_metrics(df: pd.DataFrame) -> dict:
+    category_counts = df["primary_master_category"].value_counts().to_dict()
+    low_confidence_count = int((df["mapping_confidence"] < 0.7).sum())
+    uncertain_count = int((df["primary_master_category"] == "Other / Uncertain").sum())
+        
+    return {
+        "total_images": int(len(df)),
+        "category_counts": category_counts,
+        "avg_confidence": round(float(df["mapping_confidence"].mean()), 3),
+        "low_confidence_count": low_confidence_count,
+        "low_confidence_rate": round(low_confidence_count / max(len(df), 1), 3),
+        "uncertain_count": uncertain_count,
+        "uncertain_rate": round(uncertain_count / max(len(df), 1), 3),
+    }
+
 # ============================================================================
 # MAPPING DIAGNOSTICS
 # ============================================================================
@@ -1448,7 +1463,11 @@ def main():
     audit_df = build_audit_sample(combined, per_category=50)
     audit_csv = output_root / "master_gallery_audit_sample.csv"
     audit_df.to_csv(audit_csv, index=False)
-    
+
+    metrics = build_metrics(combined)
+    metrics_json = output_root / "master_gallery_metrics.json"
+    metrics_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+
     print()
     print("Done.")
     print(f"Master images CSV:         {images_csv}")
@@ -1461,7 +1480,8 @@ def main():
     print(f"Total images consolidated: {len(combined)}")
     print(f"Categories present:        {combined['primary_master_category'].nunique()}")
     print(f"Audit sample CSV:          {audit_csv}")
-
+    print(f"Metrics JSON:              {metrics_json}")
+    
 
 if __name__ == "__main__":
     main()
