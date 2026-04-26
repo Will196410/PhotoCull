@@ -526,6 +526,15 @@ def map_primary_category(
     # ------------------------------------------------------------------------
     # DECISION-STAGE OVERRIDES
     # ------------------------------------------------------------------------
+    
+    # ------------------------------------------------------------------------
+    # WATERSIDE PROTECTION
+    # ------------------------------------------------------------------------
+    if waterside_hits >= 2 and evidence["Waterside and Harbour"] >= 6:
+        primary = "Waterside and Harbour"
+        top_score = evidence["Waterside and Harbour"]
+        review_flags.append("waterside_protected_from_landscape")
+    
     if raw_theme in atmosphere_theme_names:
         primary = "Weather, Light, and Atmosphere"
         top_score = evidence["Weather, Light, and Atmosphere"]
@@ -549,7 +558,7 @@ def map_primary_category(
     if evidence["Wildlife"] >= t["wildlife_override_min"] and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
         top_score = evidence["Wildlife"]
-
+# HERE?
     # ------------------------------------------------------------------------
     # STORMY WEATHER PROTECTION
     # ------------------------------------------------------------------------
@@ -651,7 +660,7 @@ def map_primary_category(
             top_score = evidence["Other / Uncertain"]
             review_flags.append("indoor_conservative_fallback")
 
-    if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
+        if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if (
             evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"]
             and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
@@ -659,7 +668,8 @@ def map_primary_category(
             primary = "Waterside and Harbour"
             top_score = evidence["Waterside and Harbour"]
         elif (
-            evidence["Landscape"] >= t["travel_landscape_override_min"]
+            waterside_hits < 2
+            and evidence["Landscape"] >= t["travel_landscape_override_min"]
             and evidence["Landscape"] >= evidence["Place and Travel"] - 1
         ):
             primary = "Landscape"
@@ -667,12 +677,22 @@ def map_primary_category(
 
     if (
         primary == "Place and Travel"
+        and waterside_hits < 2
         and raw_theme not in {"village, town, or street", "old building or historic architecture"}
         and evidence["Landscape"] >= t["place_to_landscape_fallback_min"]
     ):
         primary = "Landscape"
         top_score = evidence["Landscape"]
 
+    if (
+        primary == "Place and Travel"
+        and waterside_hits < 2
+        and raw_theme not in {"village, town, or street", "old building or historic architecture"}
+        and evidence["Landscape"] >= t["place_to_landscape_fallback_min"]
+    ):
+        primary = "Landscape"
+        top_score = evidence["Landscape"]
+    
     # ------------------------------------------------------------------------
     # POST-INDOOR SAFETY NET
     # ------------------------------------------------------------------------
