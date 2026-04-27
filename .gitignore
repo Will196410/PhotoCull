@@ -8,3 +8,4 @@ theme_output/
 *.tiff
 *.ARW
 *.DNG
+gold_labels_v1.csv
