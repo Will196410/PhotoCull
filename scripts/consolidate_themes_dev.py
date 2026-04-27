@@ -396,7 +396,7 @@ def map_primary_category(
     evidence["Wildlife"] += wildlife_hits * 2
     evidence["People and Human Presence"] += people_hits * 2
     evidence["Rural Life and Working Country"] += rural_hits * 2
-    evidence["Weather, Light, and Atmosphere"] += atmosphere_hits * 2
+    evidence["Weather, Light, and Atmosphere"] += atmosphere_hits
     evidence["Nature Detail"] += nature_hits * 2
     evidence["Landscape"] += landscape_hits * 2
     evidence["Place and Travel"] += place_hits * 2
@@ -446,12 +446,12 @@ def map_primary_category(
 
     if raw_theme in atmosphere_theme_names:
         if landscape_hits >= 2 or waterside_hits >= 2:
-            evidence["Weather, Light, and Atmosphere"] += 3
+            evidence["Weather, Light, and Atmosphere"] += 1
         else:
-            evidence["Weather, Light, and Atmosphere"] += 5
+            evidence["Weather, Light, and Atmosphere"] += 2
 
     if atmosphere_hits >= 3:
-        evidence["Weather, Light, and Atmosphere"] += 2
+        evidence["Weather, Light, and Atmosphere"] += 1
 
     if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
         if landscape_hits >= t["travel_bonus_threshold"]:
