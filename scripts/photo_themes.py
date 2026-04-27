@@ -21,7 +21,8 @@ RAW_EXTENSIONS = {".dng", ".arw", ".cr2", ".nef", ".orf", ".rw2", ".raf"}
 STANDARD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".tif", ".tiff", ".webp", ".bmp"}
 SUPPORTED_EXTENSIONS = RAW_EXTENSIONS | STANDARD_EXTENSIONS
 
-DEFAULT_OUTPUT_ROOT = Path("/Volumes/All Photos/theme_output")
+# DEFAULT_OUTPUT_ROOT = Path("/Volumes/All Photos/theme_output")
+DEFAULT_OUTPUT_ROOT = Path(__file__).resolve().parent / "theme_output"
 DEFAULT_PROMPTS_FILE = Path(__file__).resolve().parent / "theme_prompts.txt"
 
 FALLBACK_THEME_PROMPTS = [
