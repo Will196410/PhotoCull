@@ -514,14 +514,6 @@ def map_primary_category(
     ranked = nonzero_evidence.most_common()
     primary, top_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
-
-    # ------------------------------------------------------------------------
-    # STORMY WEATHER PROTECTION
-    # ------------------------------------------------------------------------
-    if raw_theme == "stormy weather":
-        if evidence["Weather, Light, and Atmosphere"] >= evidence["Wildlife"] - 1:
-            primary = "Weather, Light, and Atmosphere"
-            top_score = evidence["Weather, Light, and Atmosphere"]
             
     # ------------------------------------------------------------------------
     # DECISION-STAGE OVERRIDES
@@ -558,7 +550,7 @@ def map_primary_category(
     if evidence["Wildlife"] >= t["wildlife_override_min"] and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
         top_score = evidence["Wildlife"]
-# HERE?
+
     # ------------------------------------------------------------------------
     # STORMY WEATHER PROTECTION
     # ------------------------------------------------------------------------
@@ -661,19 +653,19 @@ def map_primary_category(
             review_flags.append("indoor_conservative_fallback")
 
         if raw_theme in {"travel snapshot of a place", "travel photograph showing a place", "travel showing place"}:
-        if (
-            evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"]
-            and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
-        ):
-            primary = "Waterside and Harbour"
-            top_score = evidence["Waterside and Harbour"]
-        elif (
-            waterside_hits < 2
-            and evidence["Landscape"] >= t["travel_landscape_override_min"]
-            and evidence["Landscape"] >= evidence["Place and Travel"] - 1
-        ):
-            primary = "Landscape"
-            top_score = evidence["Landscape"]
+            if (
+                evidence["Waterside and Harbour"] >= t["travel_waterside_override_min"]
+                and evidence["Waterside and Harbour"] >= evidence["Place and Travel"] - 1
+            ):
+                primary = "Waterside and Harbour"
+                top_score = evidence["Waterside and Harbour"]
+            elif (
+                waterside_hits < 2
+                and evidence["Landscape"] >= t["travel_landscape_override_min"]
+                and evidence["Landscape"] >= evidence["Place and Travel"] - 1
+            ):
+                primary = "Landscape"
+                top_score = evidence["Landscape"]
 
     if (
         primary == "Place and Travel"
