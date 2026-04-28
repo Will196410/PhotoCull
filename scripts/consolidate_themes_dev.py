@@ -466,6 +466,12 @@ def map_primary_category(
             evidence["Nature Detail"] += t["travel_bonus_amount"]
 
     # ------------------------------------------------------------------------
+    # HARD WATERSIDE DOMINANCE
+    # ------------------------------------------------------------------------
+    if waterside_hits >= 2:
+        evidence["Waterside and Harbour"] += 3
+        
+    # ------------------------------------------------------------------------
     # REVIEW FLAGS
     # ------------------------------------------------------------------------
     wildlife_farm_conflict_strength = min(evidence["Wildlife"], evidence["Farm Animals"])
@@ -522,7 +528,11 @@ def map_primary_category(
     # ------------------------------------------------------------------------
     # WATERSIDE PROTECTION
     # ------------------------------------------------------------------------
-    if waterside_hits >= 2 and evidence["Waterside and Harbour"] >= 6:
+    
+    if (
+        evidence["Waterside and Harbour"] >= 6
+        and evidence["Waterside and Harbour"] >= evidence["Landscape"]
+    ):
         primary = "Waterside and Harbour"
         top_score = evidence["Waterside and Harbour"]
         review_flags.append("waterside_protected_from_landscape")
