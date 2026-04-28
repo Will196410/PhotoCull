@@ -80,7 +80,8 @@ FALLBACK_RULES = {
     "keywords": {
         "waterside": [
             "harbour", "harbor", "port", "boat", "boats", "pier", "quay", "jetty", "marina",
-            "river", "waterside", "shore", "shoreline", "fishing", "dock", "docks"
+            "river", "waterside", "shore", "shoreline", "coast", "coastal", "beach",
+            "fishing", "dock", "docks"
         ],
         "wildlife": [
             "wildlife", "bird", "birds", "bear", "bears", "deer", "fox", "foxes", "seal", "seals",
@@ -522,6 +523,42 @@ def map_primary_category(
     # DECISION-STAGE OVERRIDES
     # ------------------------------------------------------------------------
     
+    # ------------------------------------------------------------------------
+    # COASTAL LANDSCAPE CORRECTION
+    # ------------------------------------------------------------------------
+    # CLIP often treats coastal/beach/shore scenes as generic landscapes.
+    # This correction only fires when Landscape is currently winning and the
+    # text contains explicit coastal/waterside language, without strong evidence
+    # that the subject is really people, architecture/place, rural land, or nature detail.
+    coastal_subject_tokens = {
+        "coast", "coastal", "beach", "shore", "shoreline",
+        "harbour", "harbor", "port", "pier", "quay", "jetty",
+        "marina", "dock", "docks", "river", "waterside", "boat", "boats"
+    }
+
+    rural_land_tokens = {
+        "countryside", "woodland", "forest", "field", "fields",
+        "farmland", "pasture", "hill", "hills", "valley", "moor"
+    }
+
+    has_coastal_subject = bool(tokens & coastal_subject_tokens)
+    has_rural_land_subject = bool(tokens & rural_land_tokens)
+
+    if (
+        primary == "Landscape"
+        and has_coastal_subject
+        and not has_rural_land_subject
+        and waterside_hits >= 1
+        and evidence["Waterside and Harbour"] >= 4
+        and evidence["People and Human Presence"] < 5
+        and evidence["Place and Travel"] < 5
+        and evidence["Nature Detail"] < 5
+        and raw_theme != "indoor"
+    ):
+        primary = "Waterside and Harbour"
+        top_score = evidence["Waterside and Harbour"]
+        review_flags.append("coastal_landscape_corrected_to_waterside")
+
     # ------------------------------------------------------------------------
     # WATERSIDE PROTECTION
     # ------------------------------------------------------------------------
@@ -1102,6 +1139,66 @@ def build_audit_sample(df: pd.DataFrame, per_category: int = 50) -> pd.DataFrame
     ]
     return audit[[c for c in cols if c in audit.columns]]
 
+
+def build_coastal_landscape_candidates(df: pd.DataFrame) -> pd.DataFrame:
+    # Find Landscape assignments that still contain coastal/waterside language.
+    # This is diagnostic only. It helps tune Waterside -> Landscape failures.
+    diag = add_diagnostic_columns(df)
+    rows = []
+
+    coastal_terms = {
+        "coast", "coastal", "beach", "shore", "shoreline",
+        "harbour", "harbor", "port", "pier", "quay", "jetty",
+        "marina", "dock", "docks", "river", "waterside", "boat", "boats"
+    }
+
+    rural_terms = {
+        "countryside", "woodland", "forest", "field", "fields",
+        "farmland", "pasture", "hill", "hills", "valley", "moor"
+    }
+
+    for _, row in diag.iterrows():
+        primary = row.get("primary_master_category", "")
+        if primary != "Landscape":
+            continue
+
+        text = normalize_text(collect_text_fields(row))
+        tokens = tokenize(text)
+
+        if not (tokens & coastal_terms):
+            continue
+
+        rows.append({
+            "year": row.get("year", ""),
+            "file": row.get("file", ""),
+            "path": row.get("path", ""),
+            "archive_relative_path": row.get("archive_relative_path", ""),
+            "theme_name": row.get("theme_name", ""),
+            "display_theme_name": row.get("display_theme_name", ""),
+            "top_label_1": row.get("theme_top_label_1", ""),
+            "top_label_2": row.get("theme_top_label_2", ""),
+            "top_label_3": row.get("theme_top_label_3", ""),
+            "assigned_master_category": primary,
+            "mapping_confidence": row.get("mapping_confidence", ""),
+            "has_rural_terms": bool(tokens & rural_terms),
+            "review_flags": row.get("review_flags", ""),
+            "mapping_evidence": row.get("mapping_evidence", ""),
+        })
+
+    if not rows:
+        return pd.DataFrame(columns=[
+            "year", "file", "path", "archive_relative_path",
+            "theme_name", "display_theme_name",
+            "top_label_1", "top_label_2", "top_label_3",
+            "assigned_master_category", "mapping_confidence",
+            "has_rural_terms", "review_flags", "mapping_evidence",
+        ])
+
+    return pd.DataFrame(rows).sort_values(
+        ["has_rural_terms", "year", "theme_name", "file"],
+        na_position="last",
+    )
+
 def build_suspicious_mappings(df: pd.DataFrame) -> pd.DataFrame:
     diag = add_diagnostic_columns(df)
     rows = []
@@ -1537,6 +1634,10 @@ def main():
     suspicious_csv = output_root / "master_gallery_suspicious_mappings.csv"
     suspicious_df.to_csv(suspicious_csv, index=False)
 
+    coastal_candidates_df = build_coastal_landscape_candidates(combined)
+    coastal_candidates_csv = output_root / "master_gallery_coastal_landscape_candidates.csv"
+    coastal_candidates_df.to_csv(coastal_candidates_csv, index=False)
+
     matrix_df = build_category_theme_matrix(combined)
     matrix_csv = output_root / "master_gallery_category_theme_matrix.csv"
     matrix_df.to_csv(matrix_csv, index=False)
@@ -1563,6 +1664,7 @@ def main():
     print(f"Review flags CSV:          {flags_csv}")
     print(f"Mapping diagnostics CSV:   {diagnostics_csv}")
     print(f"Suspicious mappings CSV:   {suspicious_csv}")
+    print(f"Coastal candidates CSV:    {coastal_candidates_csv}")
     print(f"Category/theme matrix CSV: {matrix_csv}")
     print_suspicious_summary(suspicious_df)
     print(f"Total images consolidated: {len(combined)}")
