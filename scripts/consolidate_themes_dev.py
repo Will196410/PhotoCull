@@ -564,6 +564,16 @@ def map_primary_category(
         top_score = evidence["Wildlife"]
 
     # ------------------------------------------------------------------------
+    # WATERSIDE VS LANDSCAPE OVERRIDE
+    # ------------------------------------------------------------------------
+    if (
+        waterside_hits >= 2
+        and evidence["Waterside and Harbour"] >= evidence["Landscape"] - 1
+    ):
+        primary = "Waterside and Harbour"
+        top_score = evidence["Waterside and Harbour"]
+    
+    # ------------------------------------------------------------------------
     # STORMY WEATHER PROTECTION
     # ------------------------------------------------------------------------
     if raw_theme == "stormy weather":
