@@ -547,7 +547,7 @@ def map_primary_category(
     if (
         primary == "Landscape"
         and has_coastal_subject
-        and not has_rural_land_subject
+        and not (has_rural_land_subject and evidence["Landscape"] >= evidence["Waterside and Harbour"] + 4)
         and waterside_hits >= 1
         and evidence["Waterside and Harbour"] >= 4
         and evidence["People and Human Presence"] < 5
@@ -562,22 +562,35 @@ def map_primary_category(
     # ------------------------------------------------------------------------
     # WATERSIDE PROTECTION
     # ------------------------------------------------------------------------
-    if waterside_hits >= 2 and evidence["Waterside and Harbour"] >= 6:
+    # Protect genuinely waterside scenes from being swallowed by generic Landscape
+    # or Weather, but do not steal People / Place / Nature / Wildlife scenes.
+    if (
+        primary in {"Landscape", "Weather, Light, and Atmosphere"}
+        and waterside_hits >= 2
+        and evidence["Waterside and Harbour"] >= 6
+        and evidence["People and Human Presence"] < 5
+        and evidence["Place and Travel"] < 5
+        and evidence["Nature Detail"] < 5
+        and evidence["Wildlife"] < 5
+        and raw_theme != "indoor"
+    ):
         primary = "Waterside and Harbour"
         top_score = evidence["Waterside and Harbour"]
-        review_flags.append("waterside_protected_from_landscape")
-    
+        review_flags.append("waterside_protected_from_landscape_or_weather")
+
     if raw_theme in atmosphere_theme_names:
-        if (
-            waterside_hits >= 2
-            or place_hits >= 2
-            or people_hits >= 2
-            or landscape_hits >= 3
-        ):
-            review_flags.append("weather_override_suppressed_by_subject")
-        else:
-            primary = "Weather, Light, and Atmosphere"
-            top_score = evidence["Weather, Light, and Atmosphere"]
+    if (
+        waterside_hits >= 1
+        or place_hits >= 2
+        or people_hits >= 2
+        or landscape_hits >= 3
+        or evidence["Waterside and Harbour"] >= 5
+        or evidence["Place and Travel"] >= 5
+    ):
+        review_flags.append("weather_override_suppressed_by_subject")
+    else:
+        primary = "Weather, Light, and Atmosphere"
+        top_score = evidence["Weather, Light, and Atmosphere"]
 
     if raw_theme != "indoor":
         if (
