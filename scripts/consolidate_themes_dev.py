@@ -579,18 +579,18 @@ def map_primary_category(
         review_flags.append("waterside_protected_from_landscape_or_weather")
 
     if raw_theme in atmosphere_theme_names:
-    if (
-        waterside_hits >= 1
-        or place_hits >= 2
-        or people_hits >= 2
-        or landscape_hits >= 3
-        or evidence["Waterside and Harbour"] >= 5
-        or evidence["Place and Travel"] >= 5
-    ):
-        review_flags.append("weather_override_suppressed_by_subject")
-    else:
-        primary = "Weather, Light, and Atmosphere"
-        top_score = evidence["Weather, Light, and Atmosphere"]
+        if (
+            waterside_hits >= 1
+            or place_hits >= 2
+            or people_hits >= 2
+            or landscape_hits >= 3
+            or evidence["Waterside and Harbour"] >= 5
+            or evidence["Place and Travel"] >= 5
+        ):
+            review_flags.append("weather_override_suppressed_by_subject")
+        else:
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
 
     if raw_theme != "indoor":
         if (
