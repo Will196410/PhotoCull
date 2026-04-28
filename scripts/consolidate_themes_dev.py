@@ -398,9 +398,12 @@ def map_primary_category(
     evidence["Rural Life and Working Country"] += rural_hits * 2
     evidence["Weather, Light, and Atmosphere"] += atmosphere_hits
     evidence["Nature Detail"] += nature_hits * 2
-    evidence["Landscape"] += landscape_hits * 2
+    evidence["Landscape"] += landscape_hits * 1.5
     evidence["Place and Travel"] += place_hits * 2
     evidence["Other / Uncertain"] += pet_hits * 2
+
+    if waterside_hits >= 2:
+        evidence["Waterside and Harbour"] += 2
 
     if raw_theme == "farm animal":
         evidence["Farm Animals"] += t["farm_exact_bonus"]
@@ -461,7 +464,7 @@ def map_primary_category(
         if people_hits >= t["travel_bonus_threshold"]:
             evidence["People and Human Presence"] += t["travel_bonus_amount"]
         if atmosphere_hits >= t["travel_bonus_threshold"]:
-            evidence["Weather, Light, and Atmosphere"] += t["travel_bonus_amount"]
+            evidence["Weather, Light, and Atmosphere"] += 1
         if nature_hits >= t["travel_bonus_threshold"]:
             evidence["Nature Detail"] += t["travel_bonus_amount"]
 
@@ -547,13 +550,14 @@ def map_primary_category(
             primary = "People and Human Presence"
             top_score = evidence["People and Human Presence"]
 
-    # if raw_theme not in atmosphere_theme_names:
-    #    if (
-    #        evidence["Weather, Light, and Atmosphere"] >= t["weather_override_min"]
-    #        and evidence["Weather, Light, and Atmosphere"] >= top_score - 1
-    #    ):
-    #        primary = "Weather, Light, and Atmosphere"
-    #        top_score = evidence["Weather, Light, and Atmosphere"]
+    if raw_theme not in atmosphere_theme_names:
+        if (
+            evidence["Weather, Light, and Atmosphere"] >= t["weather_override_min"]
+            and atmosphere_hits >= 2
+            and evidence["Weather, Light, and Atmosphere"] >= top_score + 1
+        ):
+            primary = "Weather, Light, and Atmosphere"
+            top_score = evidence["Weather, Light, and Atmosphere"]
 
     if evidence["Wildlife"] >= t["wildlife_override_min"] and evidence["Wildlife"] >= evidence["Farm Animals"]:
         primary = "Wildlife"
