@@ -106,7 +106,7 @@ python3 consolidate_themes_dev.py "/Volumes/All Photos" \
 ```
   
 ## 4. evaluate_gold_labels.py  
-Evaluate the themes to enable creation of the views.
+Evaluate the themes to enable creation of the views. Gold refers to labels used for tuning the categorisation engine. Work in progress. 
 ```
 usage: evaluate_gold_labels.py [-h] [--output OUTPUT] [--confusion-output CONFUSION_OUTPUT] gold_labels_csv master_gallery_images_csv  
 ```
@@ -136,7 +136,7 @@ Confusion matrix:  scripts/gold_label_confusion_matrix.csv
   
   
 ## 5. python archive_review_alpha.py . --limit 1000    
-Creates the views.
+Creates the views. Alpha refers to the state of the categorisation engine. I spent days tuning it with ChatGPT. Perfection is the enemy of the good enough. The contents of the category pages aren't perfect, but still useful. 
 Produces:  
 Archive Review Alpha built.  
 ```
