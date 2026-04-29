@@ -38,7 +38,8 @@ Reports written to:    /scripts/theme_output/dedupe_output
 ```
   
   
-## python photo_themes.py  
+## 2. python photo_themes.py  
+Search out the themes.
 ```
 python3 photo_themes.py "/Volumes/All Photos/Photos" \
 
@@ -58,7 +59,8 @@ Gallery:     scripts/theme_output/2023/2023_gallery.html
   
   
   
-## consolidate_themes.py and consolidate_themes_dev.py  
+## 3. consolidate_themes.py and consolidate_themes_dev.py  
+Consolidate the themes.
 ```
 usage: consolidate_themes_dev.py [-h] [--theme-output-root THEME_OUTPUT_ROOT] [--output-root OUTPUT_ROOT] [--years YEARS] [--prompts-file PROMPTS_FILE] [--rules-file RULES_FILE] [--include-html] [--strict]
 
@@ -103,13 +105,17 @@ python3 consolidate_themes_dev.py "/Volumes/All Photos" \
 
 ```
   
-## evaluate_gold_labels.py  
+## 4. evaluate_gold_labels.py  
+Evaluate the themes to enable creation of the views.
+```
 usage: evaluate_gold_labels.py [-h] [--output OUTPUT] [--confusion-output CONFUSION_OUTPUT] gold_labels_csv master_gallery_images_csv  
-  
-* python3 evaluate_gold_labels.py \  
-*   gold_labels_v1.csv \  
-*   theme_output/master_gallery/master_gallery_images.csv  
-  
+```
+```bash  
+python3 evaluate_gold_labels.py \  
+gold_labels_v1.csv \  
+theme_output/master_gallery/master_gallery_images.csv  
+```
+
 Produces:  
 Gold label evaluation  
 ---------------------  
@@ -129,8 +135,8 @@ Confusion matrix:  scripts/gold_label_confusion_matrix.csv
   
   
   
-## python archive_review_alpha.py . --limit 1000    
-  
+## 5. python archive_review_alpha.py . --limit 1000    
+Creates the views.
 Produces:  
 Archive Review Alpha built.  
 ```
