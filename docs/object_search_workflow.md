@@ -1,5 +1,5 @@
 # Object Search Workflow
-I want to look for particular objects in my photo archive. It depends on [photo theme](https://will196410/PhotoCull/docs/theme_workflow.md) workflow to know which photos to search.
+I want to look for particular objects in my photo archive. It depends on [photo theme](https://github.com/Will196410/PhotoCull/blob/main/docs/theme_workflow.md) workflow to know which photos to search.
 ```
 theme_output/master_gallery/master_gallery_images.csv
 ```
