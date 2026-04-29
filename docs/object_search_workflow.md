@@ -1,5 +1,5 @@
 # Object Search Workflow
-I want to look for particular objects in my photo archive. It depends on (photo theme)[./docs/theme_workflow.md] workflow to know which photos to search.
+I want to look for particular objects in my photo archive. It depends on [photo theme](./docs/theme_workflow.md) workflow to know which photos to search.
 ```
 theme_output/master_gallery/master_gallery_images.csv
 ```
@@ -26,5 +26,5 @@ theme_output/archive_object_search_alpha/
     winter.html
     summer.html
 ```
-** Open the index.html file in theme_output/archive_object_search_alpha **
+* Open the index.html file in theme_output/archive_object_search_alpha *
 
