@@ -26,7 +26,6 @@ print(f"Photos scanned:        {len(photos)}")
     print(f"Reports written to:    {outdir}")
 
 ```
-```
 
 python3 photo_dedupe.py "/Volumes/All Photos/Photos" \  
   --outdir theme_output/dedupe_output \  
