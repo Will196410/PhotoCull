@@ -3,10 +3,19 @@ I want to look for particular objects in my photo archive. It depends on [photo 
 ```
 theme_output/master_gallery/master_gallery_images.csv
 ```
-Here's the script.
+## The Script
 ```
 python archive_object_search_alpha.py . --queries "cars,bicycles,men,women,tents,night,winter,summer"
 ```
+Quick test:
+```
+python archive_object_search_alpha.py . \
+  --queries "cars,bicycles,tents,night,winter" \
+  --limit 500 \
+  --top-k 50
+```
+Separate out the top 50 after searching 500 images.
+## Viewing the results
 It produces: 
 ```
 theme_output/archive_object_search_alpha/
@@ -27,4 +36,17 @@ theme_output/archive_object_search_alpha/
     summer.html
 ```
 _Open the index.html file in theme_output/archive_object_search_alpha_
+```
+open theme_output/archive_object_search_alpha/index.html
+```
+On macOS, you can also run a web server from the script directory.
+```
+cd theme_output/archive_object_search_alpha
+python -m http.server 8000
+```
+Open a browser. From the terminal:
+```
+open http://localhost:8000
+```
+
 
