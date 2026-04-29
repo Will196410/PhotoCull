@@ -11,7 +11,8 @@ theme_output/master_gallery/
     
 # Workflow for creating theme website  
   
-## photo_dedupe.py  
+## 1. photo_dedupe.py  
+Reduce the number of duplicate photos.
 ```
 usage: photo_dedupe.py [-h] [--outdir OUTDIR] [--seconds-window SECONDS_WINDOW] [--phash-threshold PHASH_THRESHOLD] [--verbose] root
 
